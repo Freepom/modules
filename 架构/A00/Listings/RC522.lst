@@ -1,0 +1,725 @@
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE RC522
+OBJECT MODULE PLACED IN .\Objects\RC522.obj
+COMPILER INVOKED BY: G:\Keil_v5\C51\BIN\C51.EXE RC522.C OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\RC5
+                    -22.lst) OBJECT(.\Objects\RC522.obj)
+
+line level    source
+
+   1          #include <intrins.h>
+   2          #include "stc15w.h"
+   3          #include "RC522.h"
+   4          #include <string.h> 
+   5          #define MAXRLEN 10   
+   6          sbit     MF522_RST  =    P2^4;                   //RC500片选
+   7          sbit     MF522_NSS  =    P2^5;  //SDA
+   8          sbit     MF522_SCK  =    P2^3;
+   9          sbit     MF522_SI   =    P2^2;
+  10          sbit     MF522_SO   =    P2^1;      
+  11          
+  12              char status;
+  13              unsigned char snr_check=0;
+  14              unsigned int  unLen;
+  15              unsigned char ucComMF522Buf[MAXRLEN];                
+  16          /////////////////////////////////////////////////////////////////////
+  17          //功    能：寻卡
+  18          //参数说明: req_code[IN]:寻卡方式
+  19          //                0x52 = 寻感应区内所有符合14443A标准的卡
+  20          //                0x26 = 寻未进入休眠状态的卡
+  21          //          pTagType[OUT]：卡片类型代码
+  22          //                0x4400 = Mifare_UltraLight
+  23          //                0x0400 = Mifare_One(S50)
+  24          //                0x0200 = Mifare_One(S70)
+  25          //                0x0800 = Mifare_Pro(X)
+  26          //                0x4403 = Mifare_DESFire
+  27          //返    回: 成功返回MI_OK
+  28          /////////////////////////////////////////////////////////////////////
+  29          //char PcdRequest(unsigned char req_code,unsigned char *pTagType)
+  30          //{unsigned char i;
+  31          ////   char status;  
+  32          ////   unsigned int  unLen;
+  33          ////   unsigned char ucComMF522Buf[MAXRLEN]; 
+  34          ////  unsigned char xTest ;
+  35          //   ClearBitMask(Status2Reg,0x08);
+  36          //   WriteRawRC(BitFramingReg,0x07);
+  37          
+  38          ////  xTest = ReadRawRC(BitFramingReg);
+  39          ////  if(xTest == 0x07 )
+  40          // //   { LED_GREEN  =0 ;}
+  41          // // else {LED_GREEN =1 ;while(1){}}
+  42          //   SetBitMask(TxControlReg,0x03);
+  43          // 
+  44          //   ucComMF522Buf[0] = req_code;
+  45          
+  46          //   status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,1,ucComMF522Buf,&unLen);
+  47          ////     if(status  == MI_OK )
+  48          ////   { LED_GREEN  =0 ;}
+  49          ////   else {LED_GREEN =1 ;}
+  50          //   if ((status == MI_OK) && (unLen == 0x10))
+  51          //   {    
+  52          //       *pTagType     = ucComMF522Buf[0];
+  53          //       *(pTagType+1) = ucComMF522Buf[1];
+  54          //   }
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 2   
+
+  55          //   else
+  56          //   {   status = MI_ERR;   }
+  57          //   
+  58          //   return status;
+  59          //}
+  60          
+  61          ///////////////////////////////////////////////////////////////////////
+  62          ////功    能：防冲撞
+  63          ////参数说明: pSnr[OUT]:卡片序列号，4字节
+  64          ////返    回: 成功返回MI_OK
+  65          ///////////////////////////////////////////////////////////////////////  
+  66          //char PcdAnticoll(unsigned char *pSnr)
+  67          //{unsigned char i;
+  68          ////    char status;
+  69          ////    unsigned char i;,snr_check=0;
+  70          ////    unsigned int  unLen;
+  71          ////    unsigned char ucComMF522Buf[MAXRLEN]; 
+  72          //    
+  73          
+  74          //    ClearBitMask(Status2Reg,0x08);
+  75          //    WriteRawRC(BitFramingReg,0x00);
+  76          //    ClearBitMask(CollReg,0x80);
+  77          // 
+  78          //    ucComMF522Buf[0] = PICC_ANTICOLL1;
+  79          //    ucComMF522Buf[1] = 0x20;
+  80          
+  81          //    status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,2,ucComMF522Buf,&unLen);
+  82          
+  83          //    if (status == MI_OK)
+  84          //    {
+  85          //       for (i=0; i<4; i++)
+  86          //         {   
+  87          //             *(pSnr+i)  = ucComMF522Buf[i];
+  88          //             snr_check ^= ucComMF522Buf[i];
+  89          //         }
+  90          //         if (snr_check != ucComMF522Buf[i])
+  91          //         {   status = MI_ERR;    }
+  92          //    }
+  93          //    
+  94          //    SetBitMask(CollReg,0x80);
+  95          //    return status;
+  96          //}
+  97          
+  98          ///////////////////////////////////////////////////////////////////////
+  99          ////功    能：选定卡片
+ 100          ////参数说明: pSnr[IN]:卡片序列号，4字节
+ 101          ////返    回: 成功返回MI_OK
+ 102          ///////////////////////////////////////////////////////////////////////
+ 103          //char PcdSelect(unsigned char *pSnr)
+ 104          //{unsigned char i;
+ 105          ////    char status;
+ 106          ////    unsigned char i;
+ 107          ////    unsigned int  unLen;
+ 108          ////    unsigned char ucComMF522Buf[MAXRLEN]; 
+ 109          //    
+ 110          //    ucComMF522Buf[0] = PICC_ANTICOLL1;
+ 111          //    ucComMF522Buf[1] = 0x70;
+ 112          //    ucComMF522Buf[6] = 0;
+ 113          //    for (i=0; i<4; i++)
+ 114          //    {
+ 115          //      ucComMF522Buf[i+2] = *(pSnr+i);
+ 116          //      ucComMF522Buf[6]  ^= *(pSnr+i);
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 3   
+
+ 117          //    }
+ 118          //    CalulateCRC(ucComMF522Buf,7,&ucComMF522Buf[7]);
+ 119          //  
+ 120          //    ClearBitMask(Status2Reg,0x08);
+ 121          
+ 122          //    status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,9,ucComMF522Buf,&unLen);
+ 123          //    
+ 124          //    if ((status == MI_OK) && (unLen == 0x18))
+ 125          //    {   status = MI_OK;  }
+ 126          //    else
+ 127          //    {   status = MI_ERR;    }
+ 128          
+ 129          //    return status;
+ 130          //}
+ 131          
+ 132          ///////////////////////////////////////////////////////////////////////
+ 133          ////功    能：验证卡片密码
+ 134          ////参数说明: auth_mode[IN]: 密码验证模式
+ 135          ////                 0x60 = 验证A密钥
+ 136          ////                 0x61 = 验证B密钥 
+ 137          ////          addr[IN]：块地址
+ 138          ////          pKey[IN]：密码
+ 139          ////          pSnr[IN]：卡片序列号，4字节
+ 140          ////返    回: 成功返回MI_OK
+ 141          ///////////////////////////////////////////////////////////////////////               
+ 142          //char PcdAuthState(unsigned char auth_mode,unsigned char addr,unsigned char *pKey,unsigned char *pSnr)
+ 143          //{unsigned char i;
+ 144          ////    char status;
+ 145          ////    unsigned int  unLen;
+ 146          ////    unsigned char i,ucComMF522Buf[MAXRLEN]; 
+ 147          
+ 148          //    ucComMF522Buf[0] = auth_mode;
+ 149          //    ucComMF522Buf[1] = addr;
+ 150          //    for (i=0; i<6; i++)
+ 151          //    {    ucComMF522Buf[i+2] = *(pKey+i);   }
+ 152          //    for (i=0; i<6; i++)
+ 153          //    {    ucComMF522Buf[i+8] = *(pSnr+i);   }
+ 154          // //   memcpy(&ucComMF522Buf[2], pKey, 6); 
+ 155          // //   memcpy(&ucComMF522Buf[8], pSnr, 4); 
+ 156          //    
+ 157          //    status = PcdComMF522(PCD_AUTHENT,ucComMF522Buf,12,ucComMF522Buf,&unLen);
+ 158          //    if ((status != MI_OK) || (!(ReadRawRC(Status2Reg) & 0x08)))
+ 159          //    {   status = MI_ERR;   }
+ 160          //    
+ 161          //    return status;
+ 162          //}
+ 163          
+ 164          ///////////////////////////////////////////////////////////////////////
+ 165          ////功    能：读取M1卡一块数据
+ 166          ////参数说明: addr[IN]：块地址
+ 167          ////          pData[OUT]：读出的数据，16字节
+ 168          ////返    回: 成功返回MI_OK
+ 169          /////////////////////////////////////////////////////////////////////// 
+ 170          //char PcdRead(unsigned char addr,unsigned char *pData)
+ 171          //{unsigned char i;
+ 172          ////    char status;
+ 173          ////    unsigned int  unLen;
+ 174          ////    unsigned char i,ucComMF522Buf[MAXRLEN]; 
+ 175          
+ 176          //    ucComMF522Buf[0] = PICC_READ;
+ 177          //    ucComMF522Buf[1] = addr;
+ 178          //    CalulateCRC(ucComMF522Buf,2,&ucComMF522Buf[2]);
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 4   
+
+ 179          //   
+ 180          //    status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,4,ucComMF522Buf,&unLen);
+ 181          //    if ((status == MI_OK) && (unLen == 0x90))
+ 182          // //   {   memcpy(pData, ucComMF522Buf, 16);   }
+ 183          //    {
+ 184          //        for (i=0; i<16; i++)
+ 185          //        {    *(pData+i) = ucComMF522Buf[i];   }
+ 186          //    }
+ 187          //    else
+ 188          //    {   status = MI_ERR;   }
+ 189          //    
+ 190          //    return status;
+ 191          //}
+ 192          
+ 193          ///////////////////////////////////////////////////////////////////////
+ 194          ////功    能：写数据到M1卡一块
+ 195          ////参数说明: addr[IN]：块地址
+ 196          ////          pData[IN]：写入的数据，16字节
+ 197          ////返    回: 成功返回MI_OK
+ 198          ///////////////////////////////////////////////////////////////////////                  
+ 199          //char PcdWrite(unsigned char addr,unsigned char *pData)
+ 200          //{unsigned char i;
+ 201          ////    char status;
+ 202          ////    unsigned int  unLen;
+ 203          ////    unsigned char i,ucComMF522Buf[MAXRLEN]; 
+ 204          //    
+ 205          //    ucComMF522Buf[0] = PICC_WRITE;
+ 206          //    ucComMF522Buf[1] = addr;
+ 207          //    CalulateCRC(ucComMF522Buf,2,&ucComMF522Buf[2]);
+ 208          // 
+ 209          //    status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,4,ucComMF522Buf,&unLen);
+ 210          
+ 211          //    if ((status != MI_OK) || (unLen != 4) || ((ucComMF522Buf[0] & 0x0F) != 0x0A))
+ 212          //    {   status = MI_ERR;   }
+ 213          //        
+ 214          //    if (status == MI_OK)
+ 215          //    {
+ 216          //        //memcpy(ucComMF522Buf, pData, 16);
+ 217          //        for (i=0; i<16; i++)
+ 218          //        {    ucComMF522Buf[i] = *(pData+i);   }
+ 219          //        CalulateCRC(ucComMF522Buf,16,&ucComMF522Buf[16]);
+ 220          
+ 221          //        status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,18,ucComMF522Buf,&unLen);
+ 222          //        if ((status != MI_OK) || (unLen != 4) || ((ucComMF522Buf[0] & 0x0F) != 0x0A))
+ 223          //        {   status = MI_ERR;   }
+ 224          //    }
+ 225          //    
+ 226          //    return status;
+ 227          //}
+ 228          
+ 229          
+ 230          
+ 231          ///////////////////////////////////////////////////////////////////////
+ 232          ////功    能：命令卡片进入休眠状态
+ 233          ////返    回: 成功返回MI_OK
+ 234          ///////////////////////////////////////////////////////////////////////
+ 235          //char PcdHalt(void)
+ 236          //{
+ 237          ////    char status;
+ 238          ////    unsigned int  unLen;
+ 239          ////    unsigned char ucComMF522Buf[MAXRLEN]; 
+ 240          
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 5   
+
+ 241          //    ucComMF522Buf[0] = PICC_HALT;
+ 242          //    ucComMF522Buf[1] = 0;
+ 243          //    CalulateCRC(ucComMF522Buf,2,&ucComMF522Buf[2]);
+ 244          // 
+ 245          //    status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,4,ucComMF522Buf,&unLen);
+ 246          
+ 247          //    return MI_OK;
+ 248          //}
+ 249          
+ 250          ///////////////////////////////////////////////////////////////////////
+ 251          ////用MF522计算CRC16函数
+ 252          ///////////////////////////////////////////////////////////////////////
+ 253          //void CalulateCRC(unsigned char *pIndata,unsigned char len,unsigned char *pOutData)
+ 254          //{
+ 255          //    unsigned char i,n;
+ 256          //    ClearBitMask(DivIrqReg,0x04);
+ 257          //    WriteRawRC(CommandReg,PCD_IDLE);
+ 258          //    SetBitMask(FIFOLevelReg,0x80);
+ 259          //    for (i=0; i<len; i++)
+ 260          //    {   WriteRawRC(FIFODataReg, *(pIndata+i));   }
+ 261          //    WriteRawRC(CommandReg, PCD_CALCCRC);
+ 262          //    i = 0xFF;
+ 263          //    do 
+ 264          //    {
+ 265          //        n = ReadRawRC(DivIrqReg);
+ 266          //        i--;
+ 267          //    }
+ 268          //    while ((i!=0) && !(n&0x04));
+ 269          //    pOutData[0] = ReadRawRC(CRCResultRegL);
+ 270          //    pOutData[1] = ReadRawRC(CRCResultRegM);
+ 271          //}
+ 272          
+ 273          ///////////////////////////////////////////////////////////////////////
+ 274          ////功    能：复位RC522
+ 275          ////返    回: 成功返回MI_OK
+ 276          ///////////////////////////////////////////////////////////////////////
+ 277          //char PcdReset(void)
+ 278          //{
+ 279          //    MF522_RST=1;
+ 280          ////    _nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();
+ 281          ////    _nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();
+ 282          //    MF522_RST=0;
+ 283          ////    _nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();
+ 284          ////    _nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();
+ 285          //    MF522_RST=1;
+ 286          ////    _nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();
+ 287          ////    _nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();
+ 288          //    WriteRawRC(CommandReg,PCD_RESETPHASE);
+ 289          ////    _nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();
+ 290          ////    _nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();_nop_();
+ 291          //    
+ 292          //    WriteRawRC(ModeReg,0x3D);            //和Mifare卡通讯，CRC初始值0x6363
+ 293          //    WriteRawRC(TReloadRegL,30);           
+ 294          //    WriteRawRC(TReloadRegH,0);
+ 295          //    WriteRawRC(TModeReg,0x8D);
+ 296          //    WriteRawRC(TPrescalerReg,0x3E);
+ 297          //    WriteRawRC(TxAutoReg,0x40);     
+ 298          //    return MI_OK;
+ 299          //}
+ 300          ////////////////////////////////////////////////////////////////////////
+ 301          ////设置RC632的工作方式 
+ 302          ////////////////////////////////////////////////////////////////////////
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 6   
+
+ 303          //char M500PcdConfigISOType(unsigned char type)
+ 304          //{
+ 305          //   if (type == 'A')                     //ISO14443_A
+ 306          //   { 
+ 307          //       ClearBitMask(Status2Reg,0x08);
+ 308          
+ 309          // /*     WriteRawRC(CommandReg,0x20);    //as default   
+ 310          //       WriteRawRC(ComIEnReg,0x80);     //as default
+ 311          //       WriteRawRC(DivlEnReg,0x0);      //as default
+ 312          //         WriteRawRC(ComIrqReg,0x04);     //as default
+ 313          //         WriteRawRC(DivIrqReg,0x0);      //as default
+ 314          //         WriteRawRC(Status2Reg,0x0);//80    //trun off temperature sensor
+ 315          //         WriteRawRC(WaterLevelReg,0x08); //as default
+ 316          //       WriteRawRC(ControlReg,0x20);    //as default
+ 317          //         WriteRawRC(CollReg,0x80);    //as default
+ 318          //*/
+ 319          //       WriteRawRC(ModeReg,0x3D);//3F
+ 320          ///*       WriteRawRC(TxModeReg,0x0);      //as default???
+ 321          //         WriteRawRC(RxModeReg,0x0);      //as default???
+ 322          //         WriteRawRC(TxControlReg,0x80);  //as default???
+ 323          
+ 324          //         WriteRawRC(TxSelReg,0x10);      //as default???
+ 325          //   */
+ 326          //       WriteRawRC(RxSelReg,0x86);//84
+ 327          // //      WriteRawRC(RxThresholdReg,0x84);//as default
+ 328          // //      WriteRawRC(DemodReg,0x4D);      //as default
+ 329          
+ 330          // //      WriteRawRC(ModWidthReg,0x13);//26
+ 331          //       WriteRawRC(RFCfgReg,0x7F);   //4F
+ 332          //      /*   WriteRawRC(GsNReg,0x88);        //as default???
+ 333          //         WriteRawRC(CWGsCfgReg,0x20);    //as default???
+ 334          //       WriteRawRC(ModGsCfgReg,0x20);   //as default???
+ 335          //*/
+ 336          //         WriteRawRC(TReloadRegL,30);//tmoLength);// TReloadVal = 'h6a =tmoLength(dec) 
+ 337          //         WriteRawRC(TReloadRegH,0);
+ 338          //       WriteRawRC(TModeReg,0x8D);
+ 339          //         WriteRawRC(TPrescalerReg,0x3E);
+ 340          //         
+ 341          ////        Delay10ms();
+ 342          //  //     PcdSetTmo(106);
+ 343          ////                    delay_10ms(1);
+ 344          //       PcdAntennaOn();
+ 345          //   }
+ 346          //   else{ return -1; }
+ 347          //   
+ 348          //   return MI_OK;
+ 349          //}
+ 350          ///////////////////////////////////////////////////////////////////////
+ 351          ////功    能：读RC632寄存器
+ 352          ////参数说明：Address[IN]:寄存器地址
+ 353          ////返    回：读出的值
+ 354          ///////////////////////////////////////////////////////////////////////
+ 355          //unsigned char ReadRawRC(unsigned char Address)
+ 356          //{
+ 357          //     unsigned char i, ucAddr;
+ 358          //     unsigned char ucResult=0;
+ 359          
+ 360          //     MF522_SCK = 0;
+ 361          //     MF522_NSS = 0;
+ 362          //     ucAddr = ((Address<<1)&0x7E)|0x80;
+ 363          
+ 364          //     for(i=8;i>0;i--)
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 7   
+
+ 365          //     {
+ 366          //         MF522_SI = ((ucAddr&0x80)==0x80);
+ 367          //         MF522_SCK = 1;
+ 368          //         ucAddr <<= 1;
+ 369          //         MF522_SCK = 0;
+ 370          //     }
+ 371          
+ 372          //     for(i=8;i>0;i--)
+ 373          //     {
+ 374          //         MF522_SCK = 1;
+ 375          //         ucResult <<= 1;
+ 376          //         ucResult|=(bit)MF522_SO;
+ 377          //         MF522_SCK = 0;
+ 378          //     }
+ 379          
+ 380          //     MF522_NSS = 1;
+ 381          //     MF522_SCK = 1;
+ 382          //     return ucResult;
+ 383          //}
+ 384          
+ 385          /////////////////////////////////////////////////////////////////////////
+ 386          //////功    能：写RC632寄存器
+ 387          //////参数说明：Address[IN]:寄存器地址
+ 388          //////          value[IN]:写入的值
+ 389          /////////////////////////////////////////////////////////////////////////
+ 390          //void WriteRawRC(unsigned char Address, unsigned char value)
+ 391          //{  
+ 392          //    unsigned char i, ucAddr;
+ 393          
+ 394          //    MF522_SCK = 0;
+ 395          //    MF522_NSS = 0;
+ 396          //    ucAddr = ((Address<<1)&0x7E);
+ 397          
+ 398          //    for(i=8;i>0;i--)
+ 399          //    {
+ 400          //        MF522_SI = ((ucAddr&0x80)==0x80);
+ 401          //        MF522_SCK = 1;
+ 402          //        ucAddr <<= 1;
+ 403          //        MF522_SCK = 0;
+ 404          //    }
+ 405          
+ 406          //    for(i=8;i>0;i--)
+ 407          //    {
+ 408          //        MF522_SI = ((value&0x80)==0x80);
+ 409          //        MF522_SCK = 1;
+ 410          //        value <<= 1;
+ 411          //        MF522_SCK = 0;
+ 412          //    }
+ 413          //    MF522_NSS = 1;
+ 414          //    MF522_SCK = 1;
+ 415          //}
+ 416          
+ 417          ///////////////////////////////////////////////////////////////////////
+ 418          ////功    能：置RC522寄存器位
+ 419          ////参数说明：reg[IN]:寄存器地址
+ 420          ////          mask[IN]:置位值
+ 421          ///////////////////////////////////////////////////////////////////////
+ 422          //void SetBitMask(unsigned char reg,unsigned char mask)  
+ 423          //{
+ 424          //    char tmp = 0x0;
+ 425          //    tmp = ReadRawRC(reg);
+ 426          //    WriteRawRC(reg,tmp | mask);  // set bit mask
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 8   
+
+ 427          //}
+ 428          
+ 429          ///////////////////////////////////////////////////////////////////////
+ 430          ////功    能：清RC522寄存器位
+ 431          ////参数说明：reg[IN]:寄存器地址
+ 432          ////          mask[IN]:清位值
+ 433          ///////////////////////////////////////////////////////////////////////
+ 434          //void ClearBitMask(unsigned char reg,unsigned char mask)  
+ 435          //{
+ 436          //    char tmp = 0x0;
+ 437          //    tmp = ReadRawRC(reg);
+ 438          //    WriteRawRC(reg, tmp & ~mask);  // clear bit mask
+ 439          //} 
+ 440          
+ 441          ///////////////////////////////////////////////////////////////////////
+ 442          ////功    能：通过RC522和ISO14443卡通讯
+ 443          ////参数说明：Command[IN]:RC522命令字
+ 444          ////          pInData[IN]:通过RC522发送到卡片的数据
+ 445          ////          InLenByte[IN]:发送数据的字节长度
+ 446          ////          pOutData[OUT]:接收到的卡片返回数据
+ 447          ////          *pOutLenBit[OUT]:返回数据的位长度
+ 448          ///////////////////////////////////////////////////////////////////////
+ 449          //char PcdComMF522(unsigned char Command, 
+ 450          //                 unsigned char *pInData, 
+ 451          //                 unsigned char InLenByte,
+ 452          //                 unsigned char *pOutData, 
+ 453          //                 unsigned int  *pOutLenBit)
+ 454          //{
+ 455          //    char status = MI_ERR;
+ 456          //    unsigned char irqEn   = 0x00;
+ 457          //    unsigned char waitFor = 0x00;
+ 458          //    unsigned char lastBits;
+ 459          //    unsigned char n;
+ 460          //    unsigned int i;
+ 461          //    switch (Command)
+ 462          //    {
+ 463          //       case PCD_AUTHENT:
+ 464          //          irqEn   = 0x12;
+ 465          //          waitFor = 0x10;
+ 466          //          break;
+ 467          //       case PCD_TRANSCEIVE:
+ 468          //          irqEn   = 0x77;
+ 469          //          waitFor = 0x30;
+ 470          //          break;
+ 471          //       default:
+ 472          //         break;
+ 473          //    }
+ 474          //   
+ 475          //    WriteRawRC(ComIEnReg,irqEn|0x80);
+ 476          //    ClearBitMask(ComIrqReg,0x80);
+ 477          //    WriteRawRC(CommandReg,PCD_IDLE);
+ 478          //    SetBitMask(FIFOLevelReg,0x80);
+ 479          //    
+ 480          //    for (i=0; i<InLenByte; i++)
+ 481          //    {   WriteRawRC(FIFODataReg, pInData[i]);    }
+ 482          //    WriteRawRC(CommandReg, Command);
+ 483          //   
+ 484          //    
+ 485          //    if (Command == PCD_TRANSCEIVE)
+ 486          //    {    SetBitMask(BitFramingReg,0x80);  }
+ 487          //    
+ 488          ////    i = 600;//根据时钟频率调整，操作M1卡最大等待时间25ms
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 9   
+
+ 489          // i = 2000;
+ 490          //    do 
+ 491          //    {
+ 492          //         n = ReadRawRC(ComIrqReg);
+ 493          //         i--;
+ 494          //    }
+ 495          //    while ((i!=0) && !(n&0x01) && !(n&waitFor));
+ 496          //    ClearBitMask(BitFramingReg,0x80);
+ 497          //            
+ 498          //    if (i!=0)
+ 499          //    {    
+ 500          //         if(!(ReadRawRC(ErrorReg)&0x1B))
+ 501          //         {
+ 502          //             status = MI_OK;
+ 503          //             if (n & irqEn & 0x01)
+ 504          //             {   status = MI_NOTAGERR;   }
+ 505          //             if (Command == PCD_TRANSCEIVE)
+ 506          //             {
+ 507          //                      n = ReadRawRC(FIFOLevelReg);
+ 508          //                      lastBits = ReadRawRC(ControlReg) & 0x07;
+ 509          //                if (lastBits)
+ 510          //                {   *pOutLenBit = (n-1)*8 + lastBits;   }
+ 511          //                else
+ 512          //                {   *pOutLenBit = n*8;   }
+ 513          //                if (n == 0)
+ 514          //                {   n = 1;    }
+ 515          //                if (n > MAXRLEN)
+ 516          //                {   n = MAXRLEN;   }
+ 517          //                for (i=0; i<n; i++)
+ 518          //                {   pOutData[i] = ReadRawRC(FIFODataReg);    }
+ 519          //            }
+ 520          //         }
+ 521          //         else
+ 522          //         {   status = MI_ERR;   }
+ 523          //        
+ 524          //   }
+ 525          //   
+ 526          
+ 527          //   SetBitMask(ControlReg,0x80);           // stop timer now
+ 528          //   WriteRawRC(CommandReg,PCD_IDLE); 
+ 529          //   return status;
+ 530          //}
+ 531          
+ 532          
+ 533          ///////////////////////////////////////////////////////////////////////
+ 534          ////开启天线  
+ 535          ////每次启动或关闭天险发射之间应至少有1ms的间隔
+ 536          ///////////////////////////////////////////////////////////////////////
+ 537          //void PcdAntennaOn()
+ 538          //{
+ 539          //    unsigned char i;
+ 540          //    i = ReadRawRC(TxControlReg);
+ 541          //    if (!(i & 0x03))
+ 542          //    {
+ 543          //        SetBitMask(TxControlReg, 0x03);
+ 544          //    }
+ 545          //}
+ 546          
+ 547          
+ 548          ///////////////////////////////////////////////////////////////////////
+ 549          ////关闭天线
+ 550          ///////////////////////////////////////////////////////////////////////
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 10  
+
+ 551          //void PcdAntennaOff()
+ 552          //{
+ 553          //    ClearBitMask(TxControlReg, 0x03);
+ 554          //}
+ 555          
+ 556          
+ 557          ///////////////////////////////////////////////////////////////////////
+ 558          ////功    能：扣款和充值
+ 559          ////参数说明: dd_mode[IN]：命令字
+ 560          ////               0xC0 = 扣款
+ 561          ////               0xC1 = 充值
+ 562          ////          addr[IN]：钱包地址
+ 563          ////          pValue[IN]：4字节增(减)值，低位在前
+ 564          ////返    回: 成功返回MI_OK
+ 565          ///////////////////////////////////////////////////////////////////////                 
+ 566          //char PcdValue(unsigned char dd_mode,unsigned char addr,unsigned char *pValue)
+ 567          //{
+ 568          ////    char status;
+ 569          ////    unsigned int  unLen;
+ 570          ////    unsigned char ucComMF522Buf[MAXRLEN]; 
+ 571          //    
+ 572          //    ucComMF522Buf[0] = dd_mode;
+ 573          //    ucComMF522Buf[1] = addr;
+ 574          //    CalulateCRC(ucComMF522Buf,2,&ucComMF522Buf[2]);
+ 575          // 
+ 576          //    status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,4,ucComMF522Buf,&unLen);
+ 577          
+ 578          //    if ((status != MI_OK) || (unLen != 4) || ((ucComMF522Buf[0] & 0x0F) != 0x0A))
+ 579          //    {   status = MI_ERR;   }
+ 580          //        
+ 581          //    if (status == MI_OK)
+ 582          //    {
+ 583          //        memcpy(ucComMF522Buf, pValue, 4);
+ 584          // //       for (i=0; i<16; i++)
+ 585          // //       {    ucComMF522Buf[i] = *(pValue+i);   }
+ 586          //        CalulateCRC(ucComMF522Buf,4,&ucComMF522Buf[4]);
+ 587          //        unLen = 0;
+ 588          //        status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,6,ucComMF522Buf,&unLen);
+ 589          //        if (status != MI_ERR)
+ 590          //        {    status = MI_OK;    }
+ 591          //    }
+ 592          //    
+ 593          //    if (status == MI_OK)
+ 594          //    {
+ 595          //        ucComMF522Buf[0] = PICC_TRANSFER;
+ 596          //        ucComMF522Buf[1] = addr;
+ 597          //        CalulateCRC(ucComMF522Buf,2,&ucComMF522Buf[2]); 
+ 598          //   
+ 599          //        status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,4,ucComMF522Buf,&unLen);
+ 600          
+ 601          //        if ((status != MI_OK) || (unLen != 4) || ((ucComMF522Buf[0] & 0x0F) != 0x0A))
+ 602          //        {   status = MI_ERR;   }
+ 603          //    }
+ 604          //    return status;
+ 605          //}
+ 606          
+ 607          ///////////////////////////////////////////////////////////////////////
+ 608          ////功    能：备份钱包
+ 609          ////参数说明: sourceaddr[IN]：源地址
+ 610          ////          goaladdr[IN]：目标地址
+ 611          ////返    回: 成功返回MI_OK
+ 612          ///////////////////////////////////////////////////////////////////////
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 11  
+
+ 613          //char PcdBakValue(unsigned char sourceaddr, unsigned char goaladdr)
+ 614          //{
+ 615          ////    char status;
+ 616          ////    unsigned int  unLen;
+ 617          ////    unsigned char ucComMF522Buf[MAXRLEN]; 
+ 618          
+ 619          //    ucComMF522Buf[0] = PICC_RESTORE;
+ 620          //    ucComMF522Buf[1] = sourceaddr;
+ 621          //    CalulateCRC(ucComMF522Buf,2,&ucComMF522Buf[2]);
+ 622          // 
+ 623          //    status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,4,ucComMF522Buf,&unLen);
+ 624          
+ 625          //    if ((status != MI_OK) || (unLen != 4) || ((ucComMF522Buf[0] & 0x0F) != 0x0A))
+ 626          //    {   status = MI_ERR;   }
+ 627          //    
+ 628          //    if (status == MI_OK)
+ 629          //    {
+ 630          //        ucComMF522Buf[0] = 0;
+ 631          //        ucComMF522Buf[1] = 0;
+ 632          //        ucComMF522Buf[2] = 0;
+ 633          //        ucComMF522Buf[3] = 0;
+ 634          //        CalulateCRC(ucComMF522Buf,4,&ucComMF522Buf[4]);
+ 635          // 
+ 636          //        status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,6,ucComMF522Buf,&unLen);
+ 637          //        if (status != MI_ERR)
+ 638          //        {    status = MI_OK;    }
+ 639          //    }
+ 640          //    
+ 641          //    if (status != MI_OK)
+ 642          //    {    return MI_ERR;   }
+ 643          //    
+ 644          //    ucComMF522Buf[0] = PICC_TRANSFER;
+ 645          //    ucComMF522Buf[1] = goaladdr;
+ 646          
+ 647          //    CalulateCRC(ucComMF522Buf,2,&ucComMF522Buf[2]);
+ 648          // 
+ 649          //    status = PcdComMF522(PCD_TRANSCEIVE,ucComMF522Buf,4,ucComMF522Buf,&unLen);
+ 650          
+ 651          //    if ((status != MI_OK) || (unLen != 4) || ((ucComMF522Buf[0] & 0x0F) != 0x0A))
+ 652          //    {   status = MI_ERR;   }
+ 653          
+ 654          //    return status;
+ 655          //}
+ 656          //void InitRC522()
+ 657          //{
+ 658          //     PcdReset();
+ 659          //     PcdAntennaOff(); 
+ 660          //     PcdAntennaOn();  
+ 661          //       M500PcdConfigISOType( 'A' );
+ 662          //}
+ 663          ///////////////////////////////////////////////////////////////////////
+ 664          // Delay 10ms
+ 665          ///////////////////////////////////////////////////////////////////////
+ 666          
+ 667          //void Delay10ms()              //@11.0592MHz
+ 668          //{
+ 669          //      unsigned char i, j;
+ 670          
+ 671          //      i = 108;
+ 672          //      j = 145;
+ 673          //      do
+ 674          //      {
+C51 COMPILER V9.00   RC522                                                                 08/01/2017 20:20:02 PAGE 12  
+
+ 675          //              while (--j);
+ 676          //      } while (--i);
+ 677          //}
+ 678          
+ 679          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   ----    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     14    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,54 @@
+C51 COMPILER V9.00   ADC                                                                   08/01/2017 20:10:41 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE ADC
+OBJECT MODULE PLACED IN .\Objects\ADC.obj
+COMPILER INVOKED BY: G:\Keil_v5\C51\BIN\C51.EXE ADC.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\ADC.l
+                    -st) OBJECT(.\Objects\ADC.obj)
+
+line level    source
+
+   1          #include"ADC.h"
+   2          
+   3          /*----------------------------
+   4          Initial ADC sfr
+   5          ----------------------------*/
+   6          void InitADC()
+   7          {
+   8   1      //    P1 = P1M0 = P1M1 = 0xff;        //Set all P1 as Open-Drain mode
+   9   1          ADC_DATA = 0;                   //Clear previous result
+  10   1          ADC_CONTR = ADC_POWER | ADC_SPEEDLL;
+  11   1              IE|=0x20;//b7: EA b6:ELVD b5:EADC b4:ES b3:ET1 b6:EX1 b1:ET0 b0:EX0     中断使能
+  12   1              IP|=0x00;//b7: PPCA b6:PLVD b5:PADC b4:PS b3:PT1 b6:PX1 b1:PT0 b0:PX0 优先级    
+  13   1          P1ASF = 0x1b;//0b00011110;                   //设置P1口为AD口
+  14   1      //    Delay(2);                       //ADC power-on and delay
+  15   1      }
+  16          /*----------------------------
+  17          Get ADC result
+  18          ----------------------------*/
+  19          //unsigned char GetADCResult(unsigned char ch)
+  20          //{
+  21          //    ADC_CONTR = ADC_POWER | ADC_SPEEDLL | ch | ADC_START;
+  22          ////    _nop_();                        //Must wait before inquiry
+  23          ////    _nop_();
+  24          ////    _nop_();
+  25          ////    _nop_();
+  26          //////    while (!(ADC_CONTR & ADC_FLAG));//Wait complete flag
+  27          ////    ADC_CONTR &= ~ADC_FLAG;         //Close ADC
+  28          //
+  29          //    return ADC_DATA;                //Return ADC result
+  30          //}
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     13    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,1 @@
+"eerom.c" OPTIMIZE (8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\eerom.lst) OBJECT(.\Objects\eerom.obj)

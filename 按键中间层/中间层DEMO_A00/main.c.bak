@@ -1,0 +1,2157 @@
+#include <intrins.h>
+#include "stc15w.h"
+#include "ADC.h"
+#include "display.h"
+#include "HC595.h"
+#define u8 unsigned char
+#define u16 unsigned int
+#define NOP() _nop_()
+
+#define PinPP(Pn,n) {switch(Pn){\							
+			case 0:P0M1 &= ~(1 << n);P0M0 |=  (1 << n);break;\
+			case 1:P1M1 &= ~(1 << n);P1M0 |=  (1 << n);break;\
+			case 2:P2M1 &= ~(1 << n);P2M0 |=  (1 << n);break;\
+			case 3:P3M1 &= ~(1 << n);P3M0 |=  (1 << n);break;\
+			case 4:P4M1 &= ~(1 << n);P4M0 |=  (1 << n);break;\
+			case 5:P5M1 &= ~(1 << n);P5M0 |=  (1 << n);break;\										
+    			default:break;\    									     										
+			}\
+		    }
+		    
+#define ClrWDT	{WDT_CONTR |= 0x10;}//清看门狗，喂狗程序	
+
+//sbit Pin_RelayA0=P3^1;
+//sbit Pin_RelayB0=P3^1;
+
+sbit Pin_RelayA1=P2^4;
+sbit Pin_RelayB1=P2^5;
+sbit Pin_RelayA2=P2^2;
+sbit Pin_RelayB2=P2^3;
+sbit Pin_RelayA3=P2^0;
+sbit Pin_RelayB3=P2^1;
+sbit Pin_RelayA4=P3^6;
+sbit Pin_RelayB4=P3^7;
+sbit Pin_RelayA5=P3^4;
+sbit Pin_RelayB5=P3^5;
+sbit Pin_RelayA6=P3^2;
+sbit Pin_RelayB6=P3^3;
+
+//#define RelayON0()	{Pin_RelayA0=1;Pin_RelayB0=0;}
+//#define RelayOFF0()	{Pin_RelayA0=0;Pin_RelayB0=1;}
+//#define RelayRel0()	{Pin_RelayA0=0;Pin_RelayB0=0;}
+
+#define RelayOFF1()	{Pin_RelayA1=1;Pin_RelayB1=0;}
+#define RelayON1()	{Pin_RelayA1=0;Pin_RelayB1=1;}
+#define RelayRel1()	{Pin_RelayA1=0;Pin_RelayB1=0;}
+
+#define RelayOFF2()	{Pin_RelayA2=1;Pin_RelayB2=0;}
+#define RelayON2()	{Pin_RelayA2=0;Pin_RelayB2=1;}
+#define RelayRel2()	{Pin_RelayA2=0;Pin_RelayB2=0;}
+
+#define RelayOFF3()	{Pin_RelayA3=1;Pin_RelayB3=0;}
+#define RelayON3()	{Pin_RelayA3=0;Pin_RelayB3=1;}
+#define RelayRel3()	{Pin_RelayA3=0;Pin_RelayB3=0;}
+
+#define RelayOFF4()	{Pin_RelayA4=1;Pin_RelayB4=0;}
+#define RelayON4()	{Pin_RelayA4=0;Pin_RelayB4=1;}
+#define RelayRel4()	{Pin_RelayA4=0;Pin_RelayB4=0;}
+
+#define RelayOFF5()	{Pin_RelayA5=1;Pin_RelayB5=0;}
+#define RelayON5()	{Pin_RelayA5=0;Pin_RelayB5=1;}
+#define RelayRel5()	{Pin_RelayA5=0;Pin_RelayB5=0;}
+
+#define RelayOFF6()	{Pin_RelayA6=1;Pin_RelayB6=0;}
+#define RelayON6()	{Pin_RelayA6=0;Pin_RelayB6=1;}
+#define RelayRel6()	{Pin_RelayA6=0;Pin_RelayB6=0;}
+		
+//sbit SEG_SCK=P1^7;
+//sbit SEG_DT=P5^5;
+//sbit SEG_STCK=P5^4;
+
+#define D_RelayTm 5	//n*20ms
+//---------------------------------------------
+
+sbit Pin_Test=P2^7;
+//---------------------------------------------
+u8 R_WorkTimerMode,R_CurrendMode;
+
+u8 R_MainCurrend;
+u8 R_OtherCurrend1,R_OtherCurrend2,R_OtherCurrend3,R_OtherCurrend4,R_OtherCurrend5,R_OtherCurrend6;
+
+#define D_SumCurrend20A  2*51//0x14 //20
+#define D_SumCurrend40A  4*51//0x28 //40
+#define D_SumCurrend60A  4*51//0x3C //60
+#define D_SumCurrend80A  4*51//0x50 //80
+#define D_SumCurrend100A 4*51//0x64//100
+u8 R_SumCurrend=D_SumCurrend20A;
+
+#define D_ChangeTm10Mint  5//10*60/4	//
+#define D_ChangeTm20Mint  20*60/4	//
+#define D_ChangeTm30Mint  30*60/4	//
+#define D_ChangeTm40Mint  40*60/4	//
+#define D_ChangeTm50Mint  50*60/4	//
+u8 R_ChangeTmCnt=D_ChangeTm10Mint,R_ChangeTmCntBak=D_ChangeTm10Mint;
+
+bit Flg_RelayWork0,Flg_RelayWork1,Flg_RelayWork2,Flg_RelayWork3,Flg_RelayWork4,Flg_RelayWork5,Flg_RelayWork6;
+bit Flg_RelayError0,Flg_RelayError1,Flg_RelayError2,Flg_RelayError3,Flg_RelayError4,Flg_RelayError5,Flg_RelayError6;
+bit Flg_RelaySta0=1,Flg_RelaySta1=1,Flg_RelaySta2=1,Flg_RelaySta3=1,Flg_RelaySta4=1,Flg_RelaySta5=1,Flg_RelaySta6=1;
+u8 R_RelayMode0,R_RelayMode1,R_RelayMode2,R_RelayMode3,R_RelayMode4,R_RelayMode5,R_RelayMode6;
+u8 R_RelayWorkTm0,R_RelayWorkTm1,R_RelayWorkTm2,R_RelayWorkTm3,R_RelayWorkTm4,R_RelayWorkTm5,R_RelayWorkTm6;
+
+#define D_RelayModeRel 0
+#define D_RelayModeOFF 1
+#define D_RelayModeON  2
+
+u8 R_OtherWkMode1,R_OtherWkMode2,R_OtherWkMode3,R_OtherWkMode4,R_OtherWkMode5,R_OtherWkMode6;
+#define D_Mode_Idle 0
+#define D_Mode_Work 1
+//-----------------主循环架构的定义-----------------------------------
+u8 	R_TimerMSCnt;
+u8	R_2ms=0;//2ms计时
+bit	Flg_2ms=0;
+bit 	Flg_500MsFlash,Flg_4S;
+char	R_JmpmsCnt=0;
+u8 R_MainTermper;
+//----------------------------------------------------------
+/**********************************************************************************/
+//----按键扫描、按键检测、按键处理的定义-----------------------------------
+sbit Pin_KeySub	 	= P3^0;
+sbit Pin_TimerSet	= P3^1;
+sbit Pin_KeyAdd	 	= P2^6;
+sbit Pin_OutTrigger1	= P3^2;
+sbit Pin_OutTrigger2	= P3^3;
+sbit Pin_OutTrigger3	= P5^2;
+sbit Pin_OutTrigger4	= P5^3;
+#define	nokey		0
+#define	D_keySub	1
+#define	D_KeyAdd	2
+#define	D_keyTimerSet	3
+#define	D_keyDutyAdj	4
+#define	D_OutTrigger1	0x40
+#define	D_OutTrigger2	0x41
+#define	D_OutTrigger3	0x42
+#define	D_OutTrigger4	0x43
+
+u8	KeyDly		=0;
+u8	KeyMarkDly	=0;
+bit	FLG_keymark	=0;
+bit	FLG_keyDouble	=0;
+bit	FLG_EnkeyDouble	=0;
+bit	FLG_keyLong	=0;
+bit	FLG_EnkeyLong	=0;
+char	R_KeyDoubleTm	=0;
+u8	R_KeyLongTm	=0;
+char	KeyValue	=0;
+char	R_curkey	=0;
+char	R_keybuf	=0;
+//----------------------------------------------------------
+
+bit 	Flg_Working;
+
+bit Flg_ToDisp;
+u8 idata ADCDate_Tab1[10],ADCDate_Tab2[10],ADCDate_Tab3[10];
+u8 idata ADCDate_Tab4[10],ADCDate_Tab5[10],ADCDate_Tab6[10],ADCDate_Tab0[10];
+u8 idata R_ADCnt0,R_ADCnt1,R_ADCnt2,R_ADCnt3,R_ADCnt4,R_ADCnt5,R_ADCnt6;
+u8 R_ADCChannelCnt;
+bit Flg_ToRunADC;
+bit Flg_5SToCheckCurrend;
+//bit Flg_5SToCheckCurrend2;
+#define D_Relay1_ID 1
+#define D_Relay2_ID 2
+#define D_Relay3_ID 3
+#define D_Relay4_ID 4
+#define D_Relay5_ID 5
+#define D_Relay6_ID 6
+u8 idata ToONRelay_Tab[7]={0,0,0,0,0,0,0};
+u8 idata ToOFFRelay_Tab[7]={0,0,0,0,0,0,0};
+u8 idata NextToON_Tab[7]={0x11,0x22,0x33,0x44,0x55,0x66,0x77};
+u8 R_HeadCnt=6,R_TailCnt;//栈顶计数，栈底计数
+u8 R_ToONTm,R_ToONCnt;
+bit Flg_ToOFF;
+u8 R_5sCheckCnt;
+//----------------------------------------------------------
+u8 R_Second,R_Minute,R_Hour;
+void Delay100us()		//@11.0592MHz
+{
+	unsigned char i, j;
+
+	_nop_();
+	_nop_();
+	i = 2;
+	j = 15;
+	do
+	{
+		while (--j);
+	} while (--i);
+}
+//----------------------------------------------------------
+void Uart_Trans()
+{
+	static u8 cnt;
+	cnt++;
+	if(cnt==7)
+		{
+		cnt=0;	
+			}
+//	SBUF=0xff;
+//	while(!TI);//等待数据发完
+//	TI=0;Delay100us();				
+	SBUF=cnt;
+	while(!TI);//等待数据发完
+	TI=0;	
+	Delay100us();			
+	switch(cnt)
+	{
+		case 0:		
+			SBUF=R_MainCurrend;
+			while(!TI);//等待数据发完
+			TI=0;
+			Delay100us();	
+							
+			break;	
+		case 1:
+			SBUF=R_OtherCurrend1;
+			while(!TI);//等待数据发完
+			TI=0;Delay100us();	
+			
+			break;	
+		case 2:
+			SBUF=R_OtherCurrend2;
+			while(!TI);//等待数据发完
+			TI=0;Delay100us();	
+			
+			break;	
+		case 3:
+			SBUF=R_OtherCurrend3;
+			while(!TI);//等待数据发完
+			TI=0;Delay100us();	
+				
+			break;	
+		case 4:
+			SBUF=R_OtherCurrend4;
+			while(!TI);//等待数据发完
+			TI=0;Delay100us();	
+					
+			break;	
+		case 5:
+			SBUF=R_OtherCurrend5;
+			while(!TI);//等待数据发完
+			TI=0;Delay100us();	
+					
+			break;	
+		case 6:
+			SBUF=R_OtherCurrend6;
+			while(!TI);//等待数据发完
+			TI=0;Delay100us();	
+			
+			break;
+		default:
+			
+			break;																							
+	}
+						
+}
+//-----------------------------------------
+//
+//初始化处理子程序
+//
+//-----------------------------------------
+void initial()
+{
+
+   	 AUXR |= 0x80;                   //定时器0为1T模式
+// 	 AUXR &= 0x7f;                   //定时器0为12T模式
+//	TMOD |= 0x01;		//设置定时器模式
+	TMOD &= 0xF0;		//设置定时器模式	
+	TL0 = 0x9A;		//设置定时初值
+	TH0 = 0xFA;		//设置定时初值125us  
+    	TR0 = 1;                        //定时器0开始计时
+    	ET0 = 1;                        //使能定时器0中断
+//------------------------------------------
+
+	SCON = 0x50;		//8位数据,可变波特率
+	AUXR |= 0x01;		//串口1选择定时器2为波特率发生器 9600
+	AUXR |= 0x04;		//定时器2时钟为Fosc,即1T
+//	T2L = 0xC0;		//设定定时初值
+//	T2H = 0xFD;		//设定定时初值
+	T2L = 0xE0;		//设定定时初值
+	T2H = 0xFE;		//设定定时初值
+	AUXR |= 0x10;		//启动定时器2
+//------------------------------------------  
+//	ES=1;
+    	EA = 1;
+    	
+//---------------------------------------------------------------------
+    WDT_CONTR = 0x02;       //看门狗定时器溢出时间计算公式: (12 * 32768 * PS) / FOSC (秒)
+                            //设置看门狗定时器分频数为32,溢出时间如下:
+                            //11.0592M : 1.14s
+                            //18.432M  : 0.68s
+                            //20M      : 0.63s
+    WDT_CONTR |= 0x20;      //启动看门狗  
+    
+//    PinPP(3,5);  
+//    PinPP(2,4); 
+//    PinPP(3,7); 
+//    PinPP(2,0); 
+	Pin_KeyAdd	=1;
+	Pin_TimerSet	=1;
+	Pin_KeySub	=1;
+	Pin_OutTrigger1	=1;
+	Pin_OutTrigger2	=1;
+	Pin_OutTrigger3	=1;
+	Pin_OutTrigger4	=1;
+    	
+    	RelayRel1();  
+    	RelayRel2();  
+    	RelayRel3();  
+    	RelayRel4();  
+    	RelayRel5();
+    	RelayRel6();    
+    	
+}
+
+
+//-----------------------------------------
+//
+//函数声明
+//
+//-----------------------------------------
+u8 	MaxValue(u8 *Tab);
+void 	Push();
+void 	FormLine(bit Flg_Sta,u8 R_Channel0);
+u8 	F_SumCurrend(u8 R_Channel);
+void 	CheckCurrendError();
+void 	WorkingON();
+void 	RelayTimerDec();
+void 	RelayDrv();
+void 	CalculateCurrend();
+//void 	HC595(unsigned char SendVal);
+void 	GetADCresult();
+void 	ChangeADCchannel();
+void 	NewDisplay2();
+void 	EnableDoubleKey();
+void 	EnableLongKey(u8 XS);
+void	DealKey();
+void	ReadKeyValue();
+void	KeyScan();
+void	UpdateDisplay();
+void	Timer50msCnt();
+//-----------------------------------------
+//
+//主函数处理子程序
+//
+//-----------------------------------------
+main()
+{
+
+	initial();	//定时器初始化
+	InitADC();
+	Pin_TimerSet=1;
+	Flg_Working=0;
+	Flg_ToRunADC=1;
+	for(R_MainTermper=0;R_MainTermper<10;R_MainTermper++)
+	ADCDate_Tab0[R_MainTermper]=R_MainTermper;
+	ClrWDT;				
+	while(1)
+	{
+	ClrWDT;	
+	DealKey();	//按键处理
+	Pin_Test=0;	
+	WorkingON();
+	Pin_Test=1;
+//	Push();	
+//	MaxValue(ADCDate_Tab0);
+	RelayDrv();
+
+	if(Flg_2ms)	//10毫秒计时处理
+		{
+		Flg_2ms=0;
+//		NewDisplay2();
+		if(++R_JmpmsCnt == 10)R_JmpmsCnt=0;
+		switch(R_JmpmsCnt)	//2毫秒分时处理
+			{
+			case	0:
+					ReadKeyValue();	//按键转换
+				break;
+			case	1:
+					UpdateDisplay();
+				break;
+			case	2:
+					
+				break;												
+			case	3:
+	
+				break;
+			case	4:
+
+				break;
+			case	5:
+					ReadKeyValue();	//按键转换
+				break;
+			case	6:
+					UpdateDisplay();
+				break;
+			case	7:
+//					
+					
+				break;												
+			case	8:
+	
+				break;
+			case	9:
+					Timer50msCnt();	//20毫秒计时
+				break;
+			default:
+				break;																
+			}
+		}	
+	}
+}
+
+void et0()interrupt 1
+{
+	static u8 R_MSCnt=0;
+//	TL0 = 0x9A;		//设置定时初值
+//	TH0 = 0xFA;		//设置定时初值125us  	
+//	Pin_Test=1;
+	R_MSCnt++;				
+	if(R_MSCnt == 32)
+		{
+		R_MSCnt=0;
+		Flg_2ms=1;	
+		}
+	ChangeADCchannel();	
+	KeyScan();	//按键扫描
+	NewDisplay2();
+	
+//	Pin_Test=0;
+}
+/*----------------------------
+ADC中断服务程序
+----------------------------*/
+void adc_isr() interrupt 5 using 1
+{
+    ADC_CONTR &= !ADC_FLAG;         //清除ADC中断标志
+    GetADCresult();
+    Flg_ToRunADC=1;
+}
+	
+void 	UpdateDisplay()
+{
+	R_DBUF1=0,R_DBUF2=0,R_DBUF3=0,R_DBUF4=0,R_DBUF5=0;
+	Flg_ToDisp=0;
+	if(Flg_Working==0)
+		{
+		Flg_ToDisp=1;
+		return;	
+		}
+	if(Flg_RelayWork1)
+		{
+		LED_Relay1=1;	
+		if(Flg_RelayError1&&Flg_500MsFlash)
+			LED_Relay1=0;		
+		}
+	if(Flg_RelayWork2)
+		{
+		LED_Relay2=1;	
+		if(Flg_RelayError2&&Flg_500MsFlash)
+			LED_Relay2=0;		
+		}
+	if(Flg_RelayWork3)
+		{
+		LED_Relay3=1;	
+		if(Flg_RelayError3&&Flg_500MsFlash)
+			LED_Relay3=0;		
+		}
+	if(Flg_RelayWork4)
+		{
+		LED_Relay4=1;	
+		if(Flg_RelayError4&&Flg_500MsFlash)
+			LED_Relay4=0;		
+		}
+	if(Flg_RelayWork5)
+		{
+		LED_Relay5=1;	
+		if(Flg_RelayError5&&Flg_500MsFlash)
+			LED_Relay5=0;	
+		}
+	if(Flg_RelayWork6)
+		{
+		LED_Relay6=1;
+		if(Flg_RelayError6&&Flg_500MsFlash)
+			LED_Relay6=0;	
+		}								
+	LED_Error=1;
+	if(Flg_Working)
+		LED_Run=1;
+	if(Flg_500MsFlash)
+		{
+		Flg_ToDisp=1;
+		return;	
+		}
+	switch(R_WorkTimerMode)
+	{
+	case 0:
+		LED_Tm10Min=1;
+		break;	
+	case 1:
+		LED_Tm20Min=1;
+		break;	
+	case 2:
+		LED_Tm30Min=1;
+		break;	
+	case 3:
+		LED_Tm40Min=1;
+		break;	
+	case 4:
+		LED_Tm50Min=1;
+		break;	
+	default:		
+		break;											
+	}
+	switch(R_CurrendMode)
+	{
+	case 0:
+		LED_Currend20A=1;
+		break;	
+	case 1:
+		LED_Currend40A=1;
+		break;	
+	case 2:
+		LED_Currend60A=1;
+		break;	
+	case 3:
+		LED_Currend80A=1;
+		break;	
+	case 4:
+		LED_Currend100A=1;
+		break;	
+	default:		
+		break;											
+	}
+	
+	Flg_ToDisp=1;					
+}
+
+//显示驱动，IO口直接驱动
+void NewDisplay2()
+{
+	static char R_ComCnt=0,R_SegCnt=0,R_Data=0x02;	
+	
+	if(Flg_ToDisp==0)
+		{
+		return;	
+		}
+	R_DBUFX=0;		
+//-----------------------------------------COM口扫描
+	R_Data <<=1;
+	R_SegCnt++;
+	if(R_SegCnt==4)
+		{
+		R_SegCnt=0;
+		R_Data=0x02;
+		R_ComCnt++;
+		if(R_ComCnt==5)
+			{
+			R_ComCnt=0;	
+			}			
+		}
+			
+	switch(R_ComCnt)
+		{
+		case 0:
+			R_DBUFX=R_DBUF1;
+			HC595(0x08,~(R_DBUFX&R_Data));
+//			SEG_STCK=0;
+//			NOP();
+//			NOP();
+//			SEG_STCK=1;						
+			break;
+		case 1:
+			R_DBUFX=R_DBUF2;
+			HC595(0x10,~(R_DBUFX&R_Data));
+//			SEG_STCK=0;
+//			NOP();
+//			NOP();
+//			SEG_STCK=1;			
+			break;
+		case 2:
+			R_DBUFX=R_DBUF3;
+			HC595(0x20,~(R_DBUFX&R_Data));
+//			SEG_STCK=0;
+//			NOP();
+//			NOP();
+//			SEG_STCK=1;
+			break;
+		case 3:			
+			R_DBUFX=R_DBUF4;
+			HC595(0x40,~(R_DBUFX&R_Data));
+//			SEG_STCK=0;
+//			NOP();
+//			NOP();
+//			SEG_STCK=1;
+			break;
+		case 4:
+			R_DBUFX=R_DBUF5;
+			HC595(0x80,~(R_DBUFX&R_Data));
+//			SEG_STCK=0;
+//			NOP();
+//			NOP();
+//			SEG_STCK=1;
+			break;
+		default:
+			break;												
+		}		
+					
+}
+void	Timer50msCnt()
+{
+	static char R_500msCnt,R_250msCnt,R_5SCnt,R_4sCnt;		
+	R_500msCnt++;
+	R_250msCnt++;
+	
+	if(R_ToONTm)
+		{
+		R_ToONTm--;
+		if(!R_ToONTm)
+			{
+			
+			R_ToONCnt++;
+			if(R_ToONCnt == 7)//6个通道轮流完后，加载间隔时间
+				{
+				R_ToONCnt=0;
+				R_ChangeTmCnt=R_ChangeTmCntBak;	
+				Push();//将该通道压入栈底
+				}
+//			R_ToONTm=5;		
+			}	
+		}
+//----------计时50ms------------------------------------		
+	{
+	RelayTimerDec();
+	if(R_250msCnt==10)
+		{
+		R_250msCnt=0;
+		Uart_Trans();	
+		}	
+	
+	}
+//----------计时20ms---END---------------------------------	
+
+//----------计时500ms------------------------------------	
+	if(R_500msCnt == 25)
+		{
+		R_500msCnt=0;	
+//----------此段为500ms------------------------------------
+		
+		Flg_500MsFlash=!Flg_500MsFlash;	
+			
+//----------计时1s------------------------------------				
+	if(Flg_500MsFlash)
+		{
+		R_5SCnt++;
+		if(R_5SCnt==5)
+			{
+			R_5SCnt=0;
+			Flg_5SToCheckCurrend=1;			
+			}
+		R_4sCnt++;
+		if(R_4sCnt==4)
+			{
+			R_4sCnt=0;
+			if(R_ChangeTmCnt)
+				{
+				R_ChangeTmCnt--;
+				if(!R_ChangeTmCnt)
+					{
+					for(R_MainTermper=1;R_MainTermper<7;R_MainTermper++)
+						{
+						ToOFFRelay_Tab[R_MainTermper]=R_MainTermper;
+						ToONRelay_Tab[R_MainTermper]=0;	
+						}
+					Flg_ToOFF=1;		
+					}	
+				}	
+			}
+			
+				
+			
+//		R_Second++;
+//		if(R_Second==60)
+//			{
+//			R_Second=0;
+//							
+//			R_Minute++;
+//			if(R_Minute==60)
+//				{
+//				R_Minute=0;
+//				R_Hour++;
+//				if(R_Hour==24)
+//					{
+//					R_Hour=0;	
+//					}
+//	
+//				}	
+//			}
+
+//----------此段为1s------------------------------------			
+
+		}		
+//----------计时1s---END---------------------------------				
+		}
+//----------计时500ms--END----------------------------------
+				
+			
+}
+
+//-----------------------------------------
+//
+//按键处理子程序
+//
+//-----------------------------------------
+void	DealKey()//放在主循环中执行
+{
+	char	R_BottomMode=0;
+
+	if(R_curkey != 0)
+		{
+		 R_BottomMode = R_curkey;
+		 R_curkey=0;
+		 switch(R_BottomMode)
+			{
+			case D_keySub:	
+					if(FLG_keymark)
+						break;
+					R_WorkTimerMode++;
+					if(R_WorkTimerMode == 5)
+						{
+						R_WorkTimerMode=0;	
+						}
+					switch(R_WorkTimerMode)
+					{
+					case 0:
+						R_ChangeTmCnt=D_ChangeTm10Mint;
+						break;	
+					case 1:
+						R_ChangeTmCnt=D_ChangeTm20Mint;
+						break;	
+					case 2:
+						R_ChangeTmCnt=D_ChangeTm30Mint;
+						break;	
+					case 3:
+						R_ChangeTmCnt=D_ChangeTm40Mint;
+						break;	
+					case 4:
+						R_ChangeTmCnt=D_ChangeTm50Mint;
+						break;	
+					default:		
+						break;											
+					}
+					R_ChangeTmCntBak=R_ChangeTmCnt;	
+				break;
+
+			case D_KeyAdd:
+					if(FLG_keymark)
+						break;				
+					R_CurrendMode++;
+					if(R_CurrendMode == 5)
+						{
+						R_CurrendMode=0;	
+						}
+					switch(R_CurrendMode)
+					{
+					case 0:
+						R_SumCurrend=D_SumCurrend20A;
+						break;	
+					case 1:
+						R_SumCurrend=D_SumCurrend40A;
+						break;	
+					case 2:
+						R_SumCurrend=D_SumCurrend60A;
+						break;	
+					case 3:
+						R_SumCurrend=D_SumCurrend80A;
+						break;	
+					case 4:
+						R_SumCurrend=D_SumCurrend100A;
+						break;	
+					default:		
+						break;											
+					}						
+				break;				
+			case D_keyTimerSet:
+					if(FLG_keymark)
+						break;					
+					Flg_Working=!Flg_Working;
+					R_5sCheckCnt=0;
+					Flg_RelayWork1=0;
+					Flg_RelayWork2=0;
+					Flg_RelayWork3=0;
+					Flg_RelayWork4=0;
+					Flg_RelayWork5=0;
+					Flg_RelayWork6=0;
+//					if(Flg_Working)
+//						{
+//						R_OtherWkMode6=D_Mode_Work;
+//						R_CurrendMode=0;	
+//						}
+//						else
+//							{ 
+//							R_OtherWkMode6=D_Mode_Idle;
+//							R_CurrendMode=4;	
+//							}
+				break;
+			case D_keyDutyAdj:
+
+				break;				
+
+							
+			 default:;		           
+			 	 break;
+			}
+						
+		}
+}
+//-----------------------------------------
+//
+//按键双击键处理子程序
+//
+//-----------------------------------------
+void EnableDoubleKey()
+{
+	if(FLG_EnkeyDouble==0)
+		{
+		FLG_EnkeyDouble=1;
+		FLG_keyDouble=1;
+		R_KeyDoubleTm=2;
+		}	
+}
+//-----------------------------------------
+//
+//按键长按键处理子程序
+//
+//-----------------------------------------
+void EnableLongKey(u8 XS)
+{
+//	if(FLG_EnkeyLong==0)
+//		{
+//		FLG_EnkeyLong=1;
+//		FLG_keyLong=1;
+//		R_KeyLongTm=XS*1000/50;
+//		}	
+}
+//-----------------------------------------
+//
+//按键中间层处理子程序
+//
+//-----------------------------------------	
+void	ReadKeyValue()//放在2ms分时中执行，20ms执行一次
+{
+static u8 KeyDlyTemp;
+//	if(!Flg_SisResetOK)	//系统未初始化完成，退出
+//		return;
+	if(KeyDly)
+		KeyDly--;
+	if(!KeyDly)
+		{ 
+		 R_keybuf=0;
+		 FLG_keymark=0;
+		 KeyMarkDly=0;
+		 FLG_EnkeyLong=0;		 
+		}
+//---------------------------------------双击键处理		
+	if(R_KeyDoubleTm)
+		{
+		KeyDlyTemp=7;	
+		R_KeyDoubleTm--;			
+		}		
+	if(KeyDlyTemp)
+		{
+		KeyDlyTemp--;	
+		}
+		else
+			{
+			FLG_EnkeyDouble=0;	
+			}
+//---------------------------------------双击键处理-----END					
+	if(KeyValue != 0)
+		{ 
+
+		KeyDly=4;
+//---------------------------------------双击键处理		
+		if(FLG_EnkeyDouble)
+			{
+			if(R_KeyDoubleTm)
+				{
+				R_keybuf=KeyValue;
+				FLG_keyDouble=1;	
+				return;	
+				}
+				else
+					{
+					if(KeyValue == R_keybuf)
+					{
+					FLG_keyDouble=1;	
+					}
+					else
+						{
+						R_keybuf=R_curkey=KeyValue;
+						FLG_keyDouble=0;	
+						}															
+					return;	
+					}
+
+			
+			}
+//---------------------------------------双击键处理-----END					
+		if(KeyValue == R_keybuf)
+			{
+				KeyMarkDly++;
+
+				if(FLG_keymark==0)
+					{
+					if(FLG_EnkeyLong)
+						{
+						if(KeyMarkDly >= R_KeyLongTm)
+							{
+							FLG_keyLong=0;
+							KeyMarkDly=0;
+							FLG_keymark=1;
+							R_keybuf=R_curkey=KeyValue;	
+							KeyValue=0;				
+							}								
+						}
+						else
+							{
+							if(KeyMarkDly >= 25)
+								{
+								KeyMarkDly=0;
+								FLG_keymark=1;
+								R_keybuf=R_curkey=KeyValue;	
+								KeyValue=0;				
+								}									
+							}
+					}
+					else
+						{
+						if(FLG_EnkeyLong)
+							{
+					 		if(KeyMarkDly >= R_KeyLongTm)
+								{
+								FLG_keyLong=0;
+								KeyMarkDly=0;
+								FLG_keymark=1;
+								R_keybuf=R_curkey=KeyValue;	
+								KeyValue=0;				
+								}								
+							}
+							else
+								{
+					 			if(KeyMarkDly >= 1)
+									{
+									KeyMarkDly=0;
+									FLG_keymark=1;
+									R_keybuf=R_curkey=KeyValue;	
+									KeyValue=0;				
+									}									
+								}													
+						}		
+			 }
+			else//非连续建
+				{
+				R_keybuf=R_curkey=KeyValue;
+				KeyValue=0;
+				if(FLG_keyDouble)
+					FLG_keymark=1;
+					else
+						FLG_keymark=0;
+				KeyMarkDly=0;	
+				}		
+			}
+		else //无按键按下
+			{
+				//R_keybuf=0;
+			 //FLG_keymark=0;
+			 //KeyDly=0;
+			 //KeyValue=0;
+			 //KeyMarkDly=0;
+			}
+	}
+//-----------------------------------------
+//
+//按键扫描处理子程序
+//
+//-----------------------------------------	
+void	KeyScan()//放在中断函数中执行125us执行一次
+{
+	KeyValue=0;
+	if(!Pin_KeySub)
+		{
+			KeyValue=D_keySub;
+		}
+
+	if(!Pin_KeyAdd)
+		{
+			KeyValue=D_KeyAdd;
+//			Flg_PWM1OutTriggerEnale=1;
+		}
+//		else
+//			Flg_PWM1OutTriggerEnale=0;
+	if(!Pin_TimerSet)
+		{
+			KeyValue=D_keyTimerSet;	
+		}
+	if((!Pin_KeySub)&&(!Pin_KeyAdd))
+		{
+			KeyValue=D_keyDutyAdj;
+		}		
+								
+	}
+
+void ChangeADCchannel()
+{
+	if(Flg_ToRunADC==0)
+		{
+		return;	
+		}
+	Flg_ToRunADC=0; 	
+	R_ADCChannelCnt++;
+	if(R_ADCChannelCnt==7)R_ADCChannelCnt=0;
+	ADC_CONTR = ADC_POWER | ADC_SPEEDLL | R_ADCChannelCnt | ADC_START;
+		
+}
+
+void GetADCresult()
+{
+//	static u8 n;
+//	R_ADCChannelCnt++;
+//	if(R_ADCChannelCnt==7)R_ADCChannelCnt=0;
+	switch(R_ADCChannelCnt)
+	{
+	case 6:
+		ADCDate_Tab0[R_ADCnt0]=ADC_DATA;
+		R_ADCnt0++;
+		if(R_ADCnt0==10)
+			{
+			R_ADCnt0=0;	
+			R_MainCurrend=MaxValue(ADCDate_Tab0);	
+			}	
+		break;
+	case 5:
+//		R_OtherCurrend1=ADC_DATA;
+		ADCDate_Tab1[R_ADCnt1]=ADC_DATA;
+		R_ADCnt1++;
+		if(R_ADCnt1==10)
+			{
+			R_ADCnt1=0;	
+			R_OtherCurrend1=MaxValue(ADCDate_Tab1);	
+			}		
+		break;
+	case 4:
+//		R_OtherCurrend2=ADC_DATA;
+		ADCDate_Tab2[R_ADCnt2]=ADC_DATA;
+		R_ADCnt2++;
+		if(R_ADCnt2==10)
+			{
+			R_ADCnt2=0;	
+			R_OtherCurrend2=MaxValue(ADCDate_Tab2);	
+			}				
+		break;
+	case 3:
+//		R_OtherCurrend3=ADC_DATA;
+		ADCDate_Tab3[R_ADCnt3]=ADC_DATA;
+		R_ADCnt3++;
+		if(R_ADCnt3==10)
+			{
+			R_ADCnt3=0;	
+			R_OtherCurrend3=MaxValue(ADCDate_Tab3);	
+			}				
+		break;
+	case 2:
+//		R_OtherCurrend4=ADC_DATA;
+		ADCDate_Tab4[R_ADCnt4]=ADC_DATA;
+		R_ADCnt4++;
+		if(R_ADCnt4==10)
+			{
+			R_ADCnt4=0;	
+			R_OtherCurrend4=MaxValue(ADCDate_Tab4);	
+			}				
+		break;
+	case 1:
+//		R_OtherCurrend5=ADC_DATA;
+		ADCDate_Tab5[R_ADCnt5]=ADC_DATA;
+		R_ADCnt5++;
+		if(R_ADCnt5==10)
+			{
+			R_ADCnt5=0;	
+			R_OtherCurrend5=MaxValue(ADCDate_Tab5);	
+			}				
+		break;
+	case 0:
+//		R_OtherCurrend6=ADC_DATA;
+		ADCDate_Tab6[R_ADCnt6]=ADC_DATA;
+		R_ADCnt6++;
+		if(R_ADCnt6==10)
+			{
+			R_ADCnt6=0;	
+			R_OtherCurrend6=MaxValue(ADCDate_Tab6);	
+			}				
+		break;	
+	default:		
+		break;
+											
+	}
+			
+}
+void CheckCurrendError()
+{
+	if(R_OtherCurrend1>D_Currend35A_AD)
+		{
+		Flg_RelayError1=1;	
+		}
+		else if(R_OtherCurrend1<D_Currend35A_AD-8)
+			{
+			Flg_RelayError1=0;	
+			}
+	if(R_OtherCurrend2>D_Currend35A_AD)
+		{
+		Flg_RelayError2=1;	
+		}
+		else if(R_OtherCurrend2<D_Currend35A_AD-8)
+			{
+			Flg_RelayError2=0;	
+			}
+	if(R_OtherCurrend3>D_Currend35A_AD)
+		{
+		Flg_RelayError3=1;	
+		}
+		else if(R_OtherCurrend3<D_Currend35A_AD-8)
+			{
+			Flg_RelayError3=0;	
+			}
+	if(R_OtherCurrend4>D_Currend35A_AD)
+		{
+		Flg_RelayError4=1;	
+		}
+		else if(R_OtherCurrend4<D_Currend35A_AD-8)
+			{
+			Flg_RelayError4=0;	
+			}
+	if(R_OtherCurrend5>D_Currend35A_AD)
+		{
+		Flg_RelayError5=1;	
+		}
+		else if(R_OtherCurrend5<D_Currend35A_AD-8)
+			{
+			Flg_RelayError5=0;	
+			}
+	if(R_OtherCurrend6>D_Currend35A_AD)
+		{
+		Flg_RelayError6=1;	
+		}
+		else if(R_OtherCurrend6<D_Currend35A_AD-8)
+			{
+			Flg_RelayError6=0;	
+			}	
+}
+void CalculateCurrend()
+{
+	static u8 R_JmCnt;
+	R_JmCnt++;
+	R_MainTermper= F_SumCurrend(R_JmCnt);
+	switch(R_JmCnt)
+		{
+		case 1:
+			if(R_MainTermper > (R_OtherCurrend1+5))
+				{
+				ToONRelay_Tab[1]=D_Relay1_ID;
+				ToOFFRelay_Tab[1]=0;
+				}
+				else if(R_MainTermper < R_OtherCurrend1)
+					{
+					ToOFFRelay_Tab[1]=D_Relay1_ID;	
+					}
+			break;
+		case 2:
+			if(R_MainTermper > (R_OtherCurrend2+5))
+				{
+				ToONRelay_Tab[2]=D_Relay2_ID;
+				ToOFFRelay_Tab[2]=0;
+				}
+				else if(R_MainTermper < R_OtherCurrend2)
+					{
+					ToOFFRelay_Tab[2]=D_Relay2_ID;	
+					}			
+			break;			
+		case 3:
+			if(R_MainTermper > (R_OtherCurrend3+5))
+				{
+				ToONRelay_Tab[3]=D_Relay3_ID;
+				ToOFFRelay_Tab[3]=0;
+				}
+				else if(R_MainTermper < R_OtherCurrend3)
+					{
+					ToOFFRelay_Tab[3]=D_Relay3_ID;	
+					}			
+			break;
+		case 4:
+			if(R_MainTermper > (R_OtherCurrend4+5))
+				{
+				ToONRelay_Tab[4]=D_Relay4_ID;
+				ToOFFRelay_Tab[4]=0;
+				}
+				else if(R_MainTermper < R_OtherCurrend4)
+					{
+					ToOFFRelay_Tab[4]=D_Relay4_ID;	
+					}			
+			break;	
+		case 5:
+			if(R_MainTermper > (R_OtherCurrend5+5))
+				{
+				ToONRelay_Tab[5]=D_Relay5_ID;
+				ToOFFRelay_Tab[5]=0;
+				}
+				else if(R_MainTermper < R_OtherCurrend5)
+					{
+					ToOFFRelay_Tab[5]=D_Relay5_ID;	
+					}			
+			break;
+		case 6:
+			if(R_MainTermper > (R_OtherCurrend6+5))
+				{
+				ToONRelay_Tab[6]=D_Relay6_ID;
+				ToOFFRelay_Tab[6]=0;
+				}
+				else if(R_MainTermper < R_OtherCurrend6)
+					{
+					ToOFFRelay_Tab[6]=D_Relay6_ID;	
+					}			
+			break;
+		default:R_JmCnt=0;			
+			break;											
+		}																													
+//	for(ii=1;ii<7;ii++)
+//		{
+//		if(ToONRelay_Tab[ii]==D_Relay1_ID)
+//			R_OtherWkMode1=D_Mode_Work;
+//		if(ToONRelay_Tab[ii]==D_Relay2_ID)
+//			R_OtherWkMode2=D_Mode_Work;
+//		if(ToONRelay_Tab[ii]==D_Relay3_ID)
+//			R_OtherWkMode3=D_Mode_Work;
+//		if(ToONRelay_Tab[ii]==D_Relay4_ID)
+//			R_OtherWkMode4=D_Mode_Work;
+//		if(ToONRelay_Tab[ii]==D_Relay5_ID)
+//			R_OtherWkMode5=D_Mode_Work;
+//		if(ToONRelay_Tab[ii]==D_Relay6_ID)
+//			R_OtherWkMode6=D_Mode_Work;										
+//		}
+//	for(ii=1;ii<7;ii++)
+//		{
+//		if(ToOFFRelay_Tab[ii]==D_Relay1_ID)
+//			R_OtherWkMode1=D_Mode_Idle;
+//		if(ToOFFRelay_Tab[ii]==D_Relay2_ID)
+//			R_OtherWkMode2=D_Mode_Idle;
+//		if(ToOFFRelay_Tab[ii]==D_Relay3_ID)
+//			R_OtherWkMode3=D_Mode_Idle;
+//		if(ToOFFRelay_Tab[ii]==D_Relay4_ID)
+//			R_OtherWkMode4=D_Mode_Idle;
+//		if(ToOFFRelay_Tab[ii]==D_Relay5_ID)
+//			R_OtherWkMode5=D_Mode_Idle;
+//		if(ToOFFRelay_Tab[ii]==D_Relay6_ID)
+//			R_OtherWkMode6=D_Mode_Idle;										
+//		}		
+}
+u8 F_SumCurrend(u8 R_Channel)
+{
+	u8 R_MainTermper;
+	R_MainTermper=R_SumCurrend-R_MainCurrend;
+	if(R_Channel == 1)
+		{
+			
+		}
+		else
+			{
+			if(R_MainTermper > R_OtherCurrend1)
+				R_MainTermper=R_MainTermper-R_OtherCurrend1;	
+				else
+					{
+					return 0;	
+					}
+			}
+	if(R_Channel == 2)
+		{
+			
+		}
+		else
+			{
+			if(R_MainTermper > R_OtherCurrend2)
+				R_MainTermper=R_MainTermper-R_OtherCurrend2;	
+				else
+					{
+					return 0;	
+					}
+			}
+	if(R_Channel == 3)
+		{
+			
+		}
+		else
+			{
+			if(R_MainTermper > R_OtherCurrend3)
+				R_MainTermper=R_MainTermper-R_OtherCurrend3;	
+				else
+					{
+					return 0;	
+					}
+			}						
+	if(R_Channel == 4)
+		{
+			
+		}
+		else
+			{
+			if(R_MainTermper > R_OtherCurrend4)
+				R_MainTermper=R_MainTermper-R_OtherCurrend4;	
+				else
+					{
+					return 0;	
+					}
+			}
+	if(R_Channel == 5)
+		{
+			
+		}
+		else
+			{
+			if(R_MainTermper > R_OtherCurrend5)
+				R_MainTermper=R_MainTermper-R_OtherCurrend5;	
+				else
+					{
+					return 0;	
+					}
+			}
+	if(R_Channel == 6)
+		{
+			
+		}
+		else
+			{
+			if(R_MainTermper > R_OtherCurrend6)
+				R_MainTermper=R_MainTermper-R_OtherCurrend6;	
+				else
+					{
+					return 0;	
+					}
+			}
+	return R_MainTermper;		
+													
+}
+//void SelectChanel()
+//{
+//	if(ToONRelay_Tab[1]==D_Relay1_ID)
+//		R_SumRemCurrend=R_SumRemCurrend-R_OtherCurrend1;		
+//}
+
+void RelayDrv()
+{
+	
+//-----------------------------------主-继电器		
+//	if(Flg_RelayWork0)
+//		{
+//		if(R_RelayMode0 == D_RelayModeRel)
+//			{
+//			R_RelayMode0=D_RelayModeON;	
+//			}	
+//		}
+//		else
+//			{
+//			if(R_RelayMode0 == D_RelayModeRel)
+//				{
+//				R_RelayMode0=D_RelayModeOFF;	
+//				}				
+//			}
+//
+//-----------------------------------次-继电器1		
+	if(Flg_RelayWork1)
+		{
+		if(R_RelayMode1 == D_RelayModeRel)
+			{
+			if(!Flg_RelaySta1)	
+			R_RelayMode1=D_RelayModeON;
+			Flg_RelaySta1=1;	
+			}	
+		}
+		else
+			{
+			if(R_RelayMode1 == D_RelayModeRel)
+				{
+				if(Flg_RelaySta1)	
+				R_RelayMode1=D_RelayModeOFF;
+				Flg_RelaySta1=0;	
+				}				
+			}
+//-----------------------------------次-继电器2		
+	if(Flg_RelayWork2)
+		{
+		if(R_RelayMode2 == D_RelayModeRel)
+			{
+			if(!Flg_RelaySta2)	
+			R_RelayMode2=D_RelayModeON;
+			Flg_RelaySta2=1;	
+			}	
+		}
+		else
+			{
+			if(R_RelayMode2 == D_RelayModeRel)
+				{
+				if(Flg_RelaySta2)	
+				R_RelayMode2=D_RelayModeOFF;
+				Flg_RelaySta2=0;	
+				}				
+			}
+//-----------------------------------次-继电器3		
+	if(Flg_RelayWork3)
+		{
+		if(R_RelayMode3 == D_RelayModeRel)
+			{
+			if(!Flg_RelaySta3)	
+			R_RelayMode3=D_RelayModeON;
+			Flg_RelaySta3=1;	
+			}	
+		}
+		else
+			{
+			if(R_RelayMode3 == D_RelayModeRel)
+				{
+				if(Flg_RelaySta3)	
+				R_RelayMode3=D_RelayModeOFF;
+				Flg_RelaySta3=0;	
+				}				
+			}
+//-----------------------------------次-继电器4		
+	if(Flg_RelayWork4)
+		{
+		if(R_RelayMode4 == D_RelayModeRel)
+			{
+			if(!Flg_RelaySta4)	
+			R_RelayMode4=D_RelayModeON;
+			Flg_RelaySta4=1;	
+			}	
+		}
+		else
+			{
+			if(R_RelayMode4 == D_RelayModeRel)
+				{
+				if(Flg_RelaySta4)	
+				R_RelayMode4=D_RelayModeOFF;
+				Flg_RelaySta4=0;	
+				}				
+			}
+//-----------------------------------次-继电器5		
+	if(Flg_RelayWork5)
+		{
+		if(R_RelayMode5 == D_RelayModeRel)
+			{
+			if(!Flg_RelaySta5)	
+			R_RelayMode5=D_RelayModeON;
+			Flg_RelaySta5=1;	
+			}	
+		}
+		else
+			{
+			if(R_RelayMode5 == D_RelayModeRel)
+				{
+				if(Flg_RelaySta5)	
+				R_RelayMode5=D_RelayModeOFF;
+				Flg_RelaySta5=0;	
+				}				
+			}
+//-----------------------------------次-继电器6		
+	if(Flg_RelayWork6)
+		{
+		if(R_RelayMode6 == D_RelayModeRel)
+			{
+			if(!Flg_RelaySta6)	
+			R_RelayMode6=D_RelayModeON;
+			Flg_RelaySta6=1;	
+			}	
+		}
+		else
+			{
+			if(R_RelayMode6 == D_RelayModeRel)
+				{
+				if(Flg_RelaySta6)	
+				R_RelayMode6=D_RelayModeOFF;
+				Flg_RelaySta6=0;	
+				}				
+			}																					
+//-----------------------------------主-继电器		
+//	switch(R_RelayMode0)
+//	{
+//	case 0:
+//		RelayRel0();
+//		break;	
+//	case 1:
+//		if(!R_RelayWorkTm0)
+//			{
+//			R_RelayWorkTm0=D_RelayTm;
+//			RelayOFF0();	
+//			}
+//			
+//		break;	
+//	case 2:
+//		if(!R_RelayWorkTm0)
+//			{
+//			R_RelayWorkTm0=D_RelayTm;
+//			RelayON0();	
+//			}
+//		break;	
+//	default:
+//		
+//		break;				
+//	}
+//-----------------------------------次-继电器1		
+	switch(R_RelayMode1)
+	{
+	case 0:
+		RelayRel1();
+		break;	
+	case 1:
+		if(!R_RelayWorkTm1)
+			{
+			R_RelayWorkTm1=D_RelayTm;
+			RelayOFF1();	
+			}
+			
+		break;	
+	case 2:
+		if(!R_RelayWorkTm1)
+			{
+			R_RelayWorkTm1=D_RelayTm;
+			RelayON1();	
+			}
+		break;	
+	default:
+		
+		break;				
+	}
+//-----------------------------------次-继电器2		
+	switch(R_RelayMode2)
+	{
+	case 0:
+		RelayRel2();
+		break;	
+	case 1:
+		if(!R_RelayWorkTm2)
+			{
+			R_RelayWorkTm2=D_RelayTm;
+			RelayOFF2();	
+			}
+			
+		break;	
+	case 2:
+		if(!R_RelayWorkTm2)
+			{
+			R_RelayWorkTm2=D_RelayTm;
+			RelayON2();	
+			}
+		break;	
+	default:
+		
+		break;				
+	}
+//-----------------------------------次-继电器3		
+	switch(R_RelayMode3)
+	{
+	case 0:
+		RelayRel3();
+		break;	
+	case 1:
+		if(!R_RelayWorkTm3)
+			{
+			R_RelayWorkTm3=D_RelayTm;
+			RelayOFF3();	
+			}
+			
+		break;	
+	case 2:
+		if(!R_RelayWorkTm3)
+			{
+			R_RelayWorkTm3=D_RelayTm;
+			RelayON3();	
+			}
+		break;	
+	default:
+		
+		break;				
+	}
+//-----------------------------------次-继电器4		
+	switch(R_RelayMode4)
+	{
+	case 0:
+		RelayRel4();
+		break;	
+	case 1:
+		if(!R_RelayWorkTm4)
+			{
+			R_RelayWorkTm4=D_RelayTm;
+			RelayOFF4();	
+			}
+			
+		break;	
+	case 2:
+		if(!R_RelayWorkTm4)
+			{
+			R_RelayWorkTm4=D_RelayTm;
+			RelayON4();	
+			}
+		break;	
+	default:
+		
+		break;				
+	}
+//-----------------------------------次-继电器5		
+	switch(R_RelayMode5)
+	{
+	case 0:
+		RelayRel5();
+		break;	
+	case 1:
+		if(!R_RelayWorkTm5)
+			{
+			R_RelayWorkTm5=D_RelayTm;
+			RelayOFF5();	
+			}
+			
+		break;	
+	case 2:
+		if(!R_RelayWorkTm5)
+			{
+			R_RelayWorkTm5=D_RelayTm;
+			RelayON5();	
+			}
+		break;	
+	default:
+		
+		break;				
+	}	
+//-----------------------------------次-继电器6		
+	switch(R_RelayMode6)
+	{
+	case 0:
+		RelayRel6();
+		break;	
+	case 1:
+		if(!R_RelayWorkTm6)
+			{
+			R_RelayWorkTm6=D_RelayTm;
+			RelayOFF6();	
+			}
+			
+		break;	
+	case 2:
+		if(!R_RelayWorkTm6)
+			{
+			R_RelayWorkTm6=D_RelayTm;
+			RelayON6();	
+			}
+		break;	
+	default:
+		
+		break;				
+	}							
+}
+void RelayTimerDec()
+{
+//----------------------------------主-继电器上电时间	
+	if(R_RelayWorkTm0)
+		{
+		R_RelayWorkTm0--;
+		if(!R_RelayWorkTm0)
+			{
+			R_RelayMode0=D_RelayModeRel;	
+			}	
+		}
+//----------------------------------次-继电器1上电时间	
+	if(R_RelayWorkTm1)
+		{
+		R_RelayWorkTm1--;
+		if(!R_RelayWorkTm1)
+			{
+			R_RelayMode1=D_RelayModeRel;	
+			}	
+		}
+//----------------------------------次-继电器2上电时间	
+	if(R_RelayWorkTm2)
+		{
+		R_RelayWorkTm2--;
+		if(!R_RelayWorkTm2)
+			{
+			R_RelayMode2=D_RelayModeRel;	
+			}	
+		}
+//----------------------------------次-继电器3上电时间	
+	if(R_RelayWorkTm3)
+		{
+		R_RelayWorkTm3--;
+		if(!R_RelayWorkTm3)
+			{
+			R_RelayMode3=D_RelayModeRel;	
+			}	
+		}
+//----------------------------------次-继电器4上电时间	
+	if(R_RelayWorkTm4)
+		{
+		R_RelayWorkTm4--;
+		if(!R_RelayWorkTm4)
+			{
+			R_RelayMode4=D_RelayModeRel;	
+			}	
+		}
+//----------------------------------次-继电器5上电时间	
+	if(R_RelayWorkTm5)
+		{
+		R_RelayWorkTm5--;
+		if(!R_RelayWorkTm5)
+			{
+			R_RelayMode5=D_RelayModeRel;	
+			}	
+		}
+//----------------------------------次-继电器6上电时间	
+	if(R_RelayWorkTm6)
+		{
+		R_RelayWorkTm6--;
+		if(!R_RelayWorkTm6)
+			{
+			R_RelayMode6=D_RelayModeRel;	
+			}	
+		}													
+}
+
+void WorkingON()
+{
+	if(!Flg_Working)
+		{
+		return;	
+		}
+//	CalculateCurrend();
+	CheckCurrendError();
+		
+	if(R_5sCheckCnt < 7)//5S轮流检测	
+		{
+		if(Flg_5SToCheckCurrend)
+			{
+			Flg_5SToCheckCurrend=0;
+			R_5sCheckCnt++;	
+			}	
+		R_MainTermper=F_SumCurrend(R_5sCheckCnt);	
+		switch(R_5sCheckCnt)
+			{
+			case 1:		//R_MainTermper=0;		
+				if(R_MainTermper > R_OtherCurrend1)
+					{
+					R_OtherWkMode1=D_Mode_Work;
+					ToONRelay_Tab[1]=D_Relay1_ID;
+					ToOFFRelay_Tab[1]=0;
+					FormLine(1,D_Relay1_ID);	
+					}
+					
+					else if((R_MainTermper+8) < R_OtherCurrend1)
+						{
+						R_OtherWkMode1=D_Mode_Idle;	
+						ToOFFRelay_Tab[1]=D_Relay1_ID;
+						FormLine(0,D_Relay1_ID);
+						}
+				break;
+			case 2://R_MainTermper=0;
+				if(R_MainTermper > R_OtherCurrend2)
+					{
+					R_OtherWkMode2=D_Mode_Work;
+					ToONRelay_Tab[2]=D_Relay2_ID;
+					ToOFFRelay_Tab[2]=0;
+					FormLine(1,D_Relay2_ID);	
+					}
+					
+					else if((R_MainTermper+8) < R_OtherCurrend2)
+						{
+						R_OtherWkMode2=D_Mode_Idle;	
+						ToOFFRelay_Tab[2]=D_Relay2_ID;
+						FormLine(0,D_Relay2_ID);	
+						}				
+				break;	
+			case 3://R_MainTermper=0;
+				if(R_MainTermper > R_OtherCurrend3)
+					{
+					R_OtherWkMode3=D_Mode_Work;
+					ToONRelay_Tab[3]=D_Relay3_ID;
+					ToOFFRelay_Tab[3]=0;
+					FormLine(1,D_Relay3_ID);	
+					}
+					
+					else if((R_MainTermper+8) < R_OtherCurrend3)
+						{
+						R_OtherWkMode3=D_Mode_Idle;	
+						ToOFFRelay_Tab[3]=D_Relay3_ID;
+						FormLine(0,D_Relay3_ID);		
+						}				
+				break;	
+			case 4://R_MainTermper=0;
+				if(R_MainTermper > R_OtherCurrend4)
+					{
+					R_OtherWkMode4=D_Mode_Work;
+					ToONRelay_Tab[4]=D_Relay4_ID;
+					ToOFFRelay_Tab[4]=0;
+					FormLine(1,D_Relay4_ID);	
+					}
+					
+					else if((R_MainTermper+8) < R_OtherCurrend4)
+						{
+						R_OtherWkMode4=D_Mode_Idle;	
+						ToOFFRelay_Tab[4]=D_Relay4_ID;
+						FormLine(0,D_Relay4_ID);		
+						}				
+				break;	
+			case 5://R_MainTermper=0;
+				if(R_MainTermper > R_OtherCurrend5)
+					{
+					R_OtherWkMode5=D_Mode_Work;
+					ToONRelay_Tab[5]=D_Relay5_ID;
+					ToOFFRelay_Tab[5]=0;
+					FormLine(1,D_Relay5_ID);	
+					}
+					
+					else if((R_MainTermper+8) < R_OtherCurrend5)
+						{
+						R_OtherWkMode5=D_Mode_Idle;	
+						ToOFFRelay_Tab[5]=D_Relay5_ID;	
+						FormLine(0,D_Relay5_ID);	
+						}				
+				break;	
+			case 6://R_MainTermper=0;
+				if(R_MainTermper > R_OtherCurrend6)
+					{
+					R_OtherWkMode6=D_Mode_Work;
+					ToONRelay_Tab[6]=D_Relay6_ID;
+					ToOFFRelay_Tab[6]=0;
+					FormLine(1,D_Relay6_ID);	
+					}
+					
+					else if((R_MainTermper+8) < R_OtherCurrend6)
+						{
+						R_OtherWkMode6=D_Mode_Idle;	
+						ToOFFRelay_Tab[6]=D_Relay6_ID;
+						FormLine(0,D_Relay6_ID);		
+						}
+									
+				break;
+			default:
+//				R_5sCheckCnt=0;
+				R_ChangeTmCnt=R_ChangeTmCntBak;
+				break;																						
+			}			
+		}
+		else//固定时间轮流打开
+			{
+			if((R_ChangeTmCnt==0)&&(!Flg_ToOFF))
+				{
+					
+				if(R_ToONTm==0)
+					{
+					R_ToONTm=5;//加载电流检测时间	
+					}	
+				R_MainTermper=F_SumCurrend(NextToON_Tab[R_ToONCnt]);	
+				switch(NextToON_Tab[R_ToONCnt])//根据预先的排序依次打开通道
+					{
+					case D_Relay1_ID:		//R_MainTermper=0;		
+						if(R_MainTermper > R_OtherCurrend1)
+							{
+							R_OtherWkMode1=D_Mode_Work;
+							ToONRelay_Tab[1]=D_Relay1_ID;
+							ToOFFRelay_Tab[1]=0;
+							}
+							
+							else if((R_MainTermper+8) < R_OtherCurrend1)
+								{
+								R_OtherWkMode1=D_Mode_Idle;	
+								ToOFFRelay_Tab[1]=D_Relay1_ID;
+								}
+				
+						break;
+					case D_Relay2_ID://R_MainTermper=0;
+						if(R_MainTermper > R_OtherCurrend2)
+							{
+							R_OtherWkMode2=D_Mode_Work;
+							ToONRelay_Tab[2]=D_Relay2_ID;
+							ToOFFRelay_Tab[2]=0;
+							}
+							
+							else if((R_MainTermper+8) < R_OtherCurrend2)
+								{
+								R_OtherWkMode2=D_Mode_Idle;	
+								ToOFFRelay_Tab[2]=D_Relay2_ID;
+								}				
+						break;	
+					case D_Relay3_ID://R_MainTermper=0;
+						if(R_MainTermper > R_OtherCurrend3)
+							{
+							R_OtherWkMode3=D_Mode_Work;
+							ToONRelay_Tab[3]=D_Relay3_ID;
+							ToOFFRelay_Tab[3]=0;
+							}
+							
+							else if((R_MainTermper+8) < R_OtherCurrend3)
+								{
+								R_OtherWkMode3=D_Mode_Idle;	
+								ToOFFRelay_Tab[3]=D_Relay3_ID;
+								}				
+						break;	
+					case D_Relay4_ID://R_MainTermper=0;
+						if(R_MainTermper > R_OtherCurrend4)
+							{
+							R_OtherWkMode4=D_Mode_Work;
+							ToONRelay_Tab[4]=D_Relay4_ID;
+							ToOFFRelay_Tab[4]=0;
+							}
+							
+							else if((R_MainTermper+8) < R_OtherCurrend4)
+								{
+								R_OtherWkMode4=D_Mode_Idle;	
+								ToOFFRelay_Tab[4]=D_Relay4_ID;
+								}				
+						break;	
+					case D_Relay5_ID://R_MainTermper=0;
+						if(R_MainTermper > R_OtherCurrend5)
+							{
+							R_OtherWkMode5=D_Mode_Work;
+							ToONRelay_Tab[5]=D_Relay5_ID;
+							ToOFFRelay_Tab[5]=0;	
+							}
+							
+							else if((R_MainTermper+8) < R_OtherCurrend5)
+								{
+								R_OtherWkMode5=D_Mode_Idle;	
+								ToOFFRelay_Tab[5]=D_Relay5_ID;		
+								}				
+						break;	
+					case D_Relay6_ID://R_MainTermper=0;
+						if(R_MainTermper > R_OtherCurrend6)
+							{
+							R_OtherWkMode6=D_Mode_Work;
+							ToONRelay_Tab[6]=D_Relay6_ID;
+							ToOFFRelay_Tab[6]=0;	
+							}
+							
+							else if((R_MainTermper+8) < R_OtherCurrend6)
+								{
+								R_OtherWkMode6=D_Mode_Idle;	
+								ToOFFRelay_Tab[6]=D_Relay6_ID;		
+								}
+											
+						break;
+					default:
+						R_5sCheckCnt=0;
+						break;																						
+					}										
+				}
+				else if(R_ChangeTmCnt)
+					{
+//					CalculateCurrend();	
+					}
+				Flg_ToOFF=0;	
+				for(R_MainTermper=1;R_MainTermper<7;R_MainTermper++)
+					{
+					if(ToONRelay_Tab[R_MainTermper]==D_Relay1_ID)
+						R_OtherWkMode1=D_Mode_Work;
+					if(ToONRelay_Tab[R_MainTermper]==D_Relay2_ID)
+						R_OtherWkMode2=D_Mode_Work;
+					if(ToONRelay_Tab[R_MainTermper]==D_Relay3_ID)
+						R_OtherWkMode3=D_Mode_Work;
+					if(ToONRelay_Tab[R_MainTermper]==D_Relay4_ID)
+						R_OtherWkMode4=D_Mode_Work;
+					if(ToONRelay_Tab[R_MainTermper]==D_Relay5_ID)
+						R_OtherWkMode5=D_Mode_Work;
+					if(ToONRelay_Tab[R_MainTermper]==D_Relay6_ID)
+						R_OtherWkMode6=D_Mode_Work;										
+					}
+				for(R_MainTermper=1;R_MainTermper<7;R_MainTermper++)
+					{
+					if(ToOFFRelay_Tab[R_MainTermper]==D_Relay1_ID)
+						R_OtherWkMode1=D_Mode_Idle;
+					if(ToOFFRelay_Tab[R_MainTermper]==D_Relay2_ID)
+						R_OtherWkMode2=D_Mode_Idle;
+					if(ToOFFRelay_Tab[R_MainTermper]==D_Relay3_ID)
+						R_OtherWkMode3=D_Mode_Idle;
+					if(ToOFFRelay_Tab[R_MainTermper]==D_Relay4_ID)
+						R_OtherWkMode4=D_Mode_Idle;
+					if(ToOFFRelay_Tab[R_MainTermper]==D_Relay5_ID)
+						R_OtherWkMode5=D_Mode_Idle;
+					if(ToOFFRelay_Tab[R_MainTermper]==D_Relay6_ID)
+						R_OtherWkMode6=D_Mode_Idle;										
+					}			
+			}//固定时间轮流打开 结束
+//----------------------------------次-继电器1	
+	switch(R_OtherWkMode1)
+	{
+	case D_Mode_Idle:
+			Flg_RelayWork1=0;
+		break;
+	case D_Mode_Work:
+			Flg_RelayWork1=1;
+		break;			
+	}
+//----------------------------------次-继电器2	
+	switch(R_OtherWkMode2)
+	{
+	case D_Mode_Idle:
+			Flg_RelayWork2=0;
+		break;
+	case D_Mode_Work:
+			Flg_RelayWork2=1;
+		break;			
+	}
+//----------------------------------次-继电器3	
+	switch(R_OtherWkMode3)
+	{
+	case D_Mode_Idle:
+			Flg_RelayWork3=0;
+		break;
+	case D_Mode_Work:
+			Flg_RelayWork3=1;
+		break;			
+	}
+//----------------------------------次-继电器4	
+	switch(R_OtherWkMode4)
+	{
+	case D_Mode_Idle:
+			Flg_RelayWork4=0;
+		break;
+	case D_Mode_Work:
+			Flg_RelayWork4=1;
+		break;			
+	}
+//----------------------------------次-继电器5	
+	switch(R_OtherWkMode5)
+	{
+	case D_Mode_Idle:
+			Flg_RelayWork5=0;
+		break;
+	case D_Mode_Work:
+			Flg_RelayWork5=1;
+		break;			
+	}
+//----------------------------------次-继电器6	
+	switch(R_OtherWkMode6)
+	{
+	case D_Mode_Idle:
+			Flg_RelayWork6=0;
+		break;
+	case D_Mode_Work:
+			Flg_RelayWork6=1;
+		break;			
+	}						
+}
+void FormLine(bit Flg_Sta,u8 R_Channel0)//Flg_Sta=1 压入栈底，Flg_Sta=0 压入栈顶
+{
+	for(R_MainTermper=0;R_MainTermper<6;R_MainTermper++)
+	{
+		if(NextToON_Tab[R_MainTermper]==R_Channel0)
+			return;
+	}
+	if(Flg_Sta)
+		{
+//		for(R_MainTermper=R_HeadCnt;R_MainTermper>(R_HeadCnt-2);R_MainTermper--)
+//			{
+//			NextToON_Tab[R_MainTermper-1]=NextToON_Tab[R_MainTermper];
+//	
+//			}
+//		switch(R_Channel0)
+//			{
+//			case	2:
+//				NextToON_Tab[4]=NextToON_Tab[5];
+//				break;
+//			case	3:
+//				NextToON_Tab[3]=NextToON_Tab[4];
+//				NextToON_Tab[4]=NextToON_Tab[5];
+//				break;
+//			case	4:
+//				NextToON_Tab[2]=NextToON_Tab[3];
+//				NextToON_Tab[3]=NextToON_Tab[4];
+//				NextToON_Tab[4]=NextToON_Tab[5];				
+//				break;
+//			case	5:
+//				NextToON_Tab[1]=NextToON_Tab[2];
+//				NextToON_Tab[2]=NextToON_Tab[3];
+//				NextToON_Tab[3]=NextToON_Tab[4];
+//				NextToON_Tab[4]=NextToON_Tab[5];				
+//				break;
+//			case	6:
+				NextToON_Tab[0]=NextToON_Tab[1];
+				NextToON_Tab[2]=NextToON_Tab[3];
+				NextToON_Tab[3]=NextToON_Tab[4];
+				NextToON_Tab[4]=NextToON_Tab[5];				
+//				break;
+//			case	1:
+//				
+//				break;																					
+//			}	
+		NextToON_Tab[5]=R_Channel0;//把当前值压入栈底
+		R_HeadCnt--;				
+		}
+		else
+			{
+			R_HeadCnt--;
+			NextToON_Tab[R_HeadCnt]=R_Channel0;//把当前值压入栈底	
+			}
+			
+//	NextToON_Tab[R_HeadCnt]=R_Channel0;
+//	R_HeadCnt++;
+//	if(R_HeadCnt==6)R_HeadCnt=0;
+}
+void Push()//将栈顶压入栈底，不断循环
+{
+	u8 ii;
+	R_MainTermper=NextToON_Tab[0];
+	for(ii=0;ii<5;ii++)
+		{
+		NextToON_Tab[ii]=NextToON_Tab[ii+1];
+	
+		}
+	NextToON_Tab[ii]=R_MainTermper;
+//	R_MainTermper=NextToON_Tab[0];	//测试	
+}
+u8 MaxValue(u8 *Tab)
+{
+	u8 i;
+	for(i=0;i<10;i++)
+		{
+		if(*(Tab+i)>*(Tab+i+1))
+			R_MainTermper=*(Tab+i);
+			else 
+				R_MainTermper=*(Tab+i+1);				
+		}
+
+			
+	return 	R_MainTermper;	
+}
+//--------------------------------------------------------
+//数码管SEG口的数据发送
+//
+//
+//--------------------------------------------------------
+//void HC595(unsigned char SendVal)
+//{
+//unsigned char i;
+//
+//for(i=0;i<8;i++)
+//{
+//	SEG_SCK=0;
+//	NOP();
+//	NOP();
+//	if((SendVal<<i)&0x80)SEG_DT=1;
+//		else SEG_DT=0;
+//	NOP();
+//	NOP();
+//	SEG_SCK=1;
+//	}
+//
+//}

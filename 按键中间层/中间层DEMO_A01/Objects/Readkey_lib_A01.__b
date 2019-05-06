@@ -1,0 +1,4 @@
+TRANSFER
+".\Objects\STARTUP.obj",
+".\Objects\ReadKey.obj" 
+TO ".\Objects\Readkey_lib_A01.LIB"

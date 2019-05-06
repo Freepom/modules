@@ -1,0 +1,83 @@
+#ifndef	_display_H
+#define	_display_H
+
+#include "stc15w.h"
+//---------------------------------------------
+//-----------------------------------------------------------
+//显示2
+//显示
+unsigned char 	R_DBUF1=0,R_DBUF2=0,R_DBUF3=0,R_DBUF4=0;//,R_DBUF5=0,R_DBUF6=0;
+unsigned char 	bdata  R_DBUFX;
+//sbit 	Flg_SegA=R_DBUFX^0;
+//sbit 	Flg_SegB=R_DBUFX^1;
+//sbit 	Flg_SegC=R_DBUFX^2;
+//sbit 	Flg_SegD=R_DBUFX^3;
+//sbit 	Flg_SegE=R_DBUFX^4;
+//sbit 	Flg_SegF=R_DBUFX^5;
+//sbit 	Flg_SegG=R_DBUFX^6;
+//sbit 	Flg_SegH=R_DBUFX^7;
+//SEG口
+#define SEG P1
+sbit	PIN_SEGA = P1^4;   //P1^5;   P1^2; 
+sbit	PIN_SEGB = P1^3;   //P1^0;   P1^7; 
+sbit	PIN_SEGC = P1^2;   //P1^1;   P1^6; 
+sbit	PIN_SEGD = P1^1;   //P1^2;   P1^5; 
+sbit	PIN_SEGE = P1^0;   //P1^3;   P1^4; 
+sbit	PIN_SEGF = P1^5;   //P1^4;   P1^3; 
+sbit	PIN_SEGG = P1^6;   //P1^6;   P1^1; 
+sbit	PIN_SEGDP = P1^7;  // P1^7;   P1^0;
+#define A_SEG 0x01// 0X01
+#define B_SEG 0x02// 0X02
+#define C_SEG 0x04// 0X04
+#define D_SEG 0x08// 0X08      
+#define E_SEG 0x10// 0X10     
+#define F_SEG 0x20// 0X20    
+#define G_SEG 0x40// 0X40    
+#define H_SEG 0x80// 0X80    
+//SEGC A_SEG+B_SEG+C_SEG+D_SEG+E_SEG+F_SEG+G_SEG+H_SEG
+#define DT_0 	A_SEG+B_SEG+C_SEG+D_SEG+E_SEG+F_SEG+0+0
+#define DT_1	 0+B_SEG+C_SEG+0+0+0+0+0
+#define DT_2 	A_SEG+B_SEG+0+D_SEG+E_SEG+0+G_SEG+0
+#define DT_3 	A_SEG+B_SEG+C_SEG+D_SEG+0+0+G_SEG+0
+#define DT_4 	0+B_SEG+C_SEG+0+0+F_SEG+G_SEG+0
+#define DT_5 	A_SEG+0+C_SEG+D_SEG+0+F_SEG+G_SEG+0
+#define DT_6 	A_SEG+0+C_SEG+D_SEG+E_SEG+F_SEG+G_SEG+0
+#define DT_7 	A_SEG+B_SEG+C_SEG+0+0+0+0+0
+#define DT_8 	A_SEG+B_SEG+C_SEG+D_SEG+E_SEG+F_SEG+G_SEG+0
+#define DT_9 	A_SEG+B_SEG+C_SEG+D_SEG+0+F_SEG+G_SEG+0
+#define DT_A 	A_SEG+B_SEG+C_SEG+0+E_SEG+F_SEG+G_SEG+0   //0X77
+#define DT_b 	0+0+C_SEG+D_SEG+E_SEG+F_SEG+G_SEG+0
+#define DT_C 	A_SEG+0+0+D_SEG+E_SEG+F_SEG+0+0   //0X79
+#define DT_d 	0+B_SEG+C_SEG+D_SEG+E_SEG+0+G_SEG+0
+#define DT_E 	A_SEG+0+0+D_SEG+E_SEG+F_SEG+G_SEG+0
+#define DT_F 	A_SEG+0+0+0+E_SEG+F_SEG+G_SEG+0   //0X71
+#define DT_H 	B_SEG+0+C_SEG+0+E_SEG+F_SEG+G_SEG+0 
+#define DT_L 	D_SEG+0+0+0+E_SEG+F_SEG+0+0 
+#define DT_T 	D_SEG+0+0+0+E_SEG+F_SEG+G_SEG+0 
+#define DT_O 	A_SEG+B_SEG+C_SEG+D_SEG+E_SEG+F_SEG+0+0   //0X3f
+#define DT_P 	A_SEG+B_SEG+0+0+E_SEG+F_SEG+G_SEG+0   //0X3f
+#define DT_n 	A_SEG+B_SEG+C_SEG+0+E_SEG+F_SEG+0+0   //0X54
+#define DT_o 	0+0+C_SEG+D_SEG+E_SEG+0+G_SEG+0          //0X5C 
+#define DT_XG 	0+0+0+0+0+0+G_SEG+0               //0X40
+#define DT_LL 	0+0+C_SEG+0+0+F_SEG+G_SEG+0               //0X46
+#define DT_L_L 	B_SEG+0+0+0+E_SEG+0+G_SEG+0
+#define DT_G 	A_SEG+B_SEG+C_SEG+D_SEG+E_SEG+F_SEG+G_SEG+H_SEG              // 0X64
+#define DT_NO 0 
+#define DS_NO 15   //与数组中的位置对应
+
+unsigned char idata Digit_Tab[]={DT_0,DT_1,DT_2,DT_3,DT_4,DT_5,DT_6,DT_7,DT_8,\
+                                DT_9,DT_A,DT_C,DT_d,DT_E,DT_F,DT_NO};// 显示段码值0~9
+//unsigned char code RunLed_Tab[]={0,D_SEG,D_SEG+G_SEG,A_SEG+D_SEG+G_SEG,D_SEG,E_SEG,F_SEG,G_SEG}; 
+//unsigned char code RunLed_Tab2[16][2]={	{A_SEG,0},{0,A_SEG},{0,B_SEG},{0,C_SEG},{0,D_SEG},\
+//					{D_SEG,0},{E_SEG,0},{F_SEG,0}\
+//					}; 
+//unsigned char code RunLed_Tab3[16][2]={	{A_SEG,A_SEG},{0,A_SEG+B_SEG},{0,B_SEG+C_SEG},{0,C_SEG+D_SEG},{D_SEG,D_SEG},\
+//					{D_SEG+E_SEG,0},{E_SEG+F_SEG,0},{A_SEG+F_SEG,0}\
+//					};					                             
+//COM口
+sbit	PIN_COM1 = P2^7;
+sbit	PIN_COM2 = P2^6;
+sbit	PIN_COM3 = P2^5;
+sbit	PIN_COM4 = P3^4;
+
+#endif

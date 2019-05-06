@@ -1,0 +1,168 @@
+C51 COMPILER V9.00   ADC                                                                   09/03/2017 21:30:28 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE ADC
+OBJECT MODULE PLACED IN .\Objects\ADC.obj
+COMPILER INVOKED BY: G:\Keil_v5\C51\BIN\C51.EXE SRC\ADC.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\SRC) DEBUG OBJECTEXTEND PRIN
+                    -T(.\Listings\ADC.lst) OBJECT(.\Objects\ADC.obj)
+
+line level    source
+
+   1          #include"ADC.h"
+   2          
+   3          unsigned char R_ADData0,R_ADData1,R_ADData2,R_ADData3;
+   4          unsigned char R_ADData4,R_ADData5,R_ADData6,R_ADData7;
+   5          unsigned char R_ADCChannel;
+   6          bit Flg_ToRunADC;
+   7          /*----------------------------
+   8          Initial ADC sfr
+   9          ----------------------------*/
+  10          void Init_ADC()
+  11          {
+  12   1      //    P1 = P1M0 = P1M1 = 0xff;        //Set all P1 as Open-Drain mode
+  13   1          ADC_DATA = 0;                   //Clear previous result
+  14   1          ADC_CONTR = ADC_POWER | ADC_SPEEDLL;
+  15   1              IE|=0x20;//b7: EA b6:ELVD b5:EADC b4:ES b3:ET1 b6:EX1 b1:ET0 b0:EX0     中断使能
+  16   1              IP|=0x00;//b7: PPCA b6:PLVD b5:PADC b4:PS b3:PT1 b6:PX1 b1:PT0 b0:PX0 优先级    
+  17   1          P1ASF = D_EnADC0|D_EnADC1|D_EnADC2|D_EnADC3|D_EnADC4|D_EnADC5|D_EnADC6|D_EnADC7;//
+  18   1      
+  19   1      }
+  20          /*----------------------------
+  21          Get ADC result
+  22          ----------------------------*/
+  23          void GetADCresult()
+  24          {
+  25   1      
+  26   1              switch(R_ADCChannel)
+  27   1              {
+  28   2              case 7:
+  29   2                      R_ADData7=ADC_DATA;
+  30   2                              
+  31   2                      break;          
+  32   2              case 6:
+  33   2                      R_ADData6=ADC_DATA;
+  34   2                              
+  35   2                      break;
+  36   2              case 5:
+  37   2                      R_ADData5=ADC_DATA;
+  38   2                      
+  39   2                      break;
+  40   2              case 4:
+  41   2                      R_ADData4=ADC_DATA;
+  42   2                                      
+  43   2                      break;
+  44   2              case 3:
+  45   2                      R_ADData3=ADC_DATA;
+  46   2                                      
+  47   2                      break;
+  48   2              case 2:
+  49   2                      R_ADData2=ADC_DATA;
+  50   2                                      
+  51   2                      break;
+  52   2              case 1:
+  53   2                      R_ADData1=ADC_DATA;
+  54   2                                      
+C51 COMPILER V9.00   ADC                                                                   09/03/2017 21:30:28 PAGE 2   
+
+  55   2                      break;
+  56   2              case 0:
+  57   2                      R_ADData0=ADC_DATA;
+  58   2                                      
+  59   2                      break;  
+  60   2              default:                
+  61   2                      break;
+  62   2                                                                                              
+  63   2              }                       
+  64   1      }
+  65          //-------------------------------------------
+  66          /*---------------开启ADc检测---------------------
+  67          //--------------------------------------------
+  68          /输入：
+  69          /输出：
+  70          /备注：放在定时器中断中执行，自动循环打开每路ADC
+  71          /       通过ADC中断的方式查询AD值
+  72          */
+  73          //-------------------------------------------
+  74          void ChangeADCchannel()
+  75          {
+  76   1      //      if(Flg_ToRunADC==0)
+  77   1      //              {
+  78   1      //              return; 
+  79   1      //              }
+  80   1      //      Flg_ToRunADC=0;         
+  81   1              R_ADCChannel++;
+  82   1              if(R_ADCChannel==4)R_ADCChannel=2;
+  83   1              switch(R_ADCChannel)
+  84   1              {
+  85   2              case 7:
+  86   2                      #if D_EnADC7
+                              ADC_CONTR = ADC_POWER | ADC_SPEEDLL | R_ADCChannel | ADC_START;
+                              #endif
+  89   2                      break;          
+  90   2              case 6:
+  91   2                      #if D_EnADC6
+                              ADC_CONTR = ADC_POWER | ADC_SPEEDLL | R_ADCChannel | ADC_START;
+                              #endif
+  94   2                      break;  
+  95   2              case 5:
+  96   2                      #if D_EnADC5
+                              ADC_CONTR = ADC_POWER | ADC_SPEEDLL | R_ADCChannel | ADC_START;
+                              #endif
+  99   2                      break;  
+ 100   2              case 4:
+ 101   2                      #if D_EnADC4
+                              ADC_CONTR = ADC_POWER | ADC_SPEEDLL | R_ADCChannel | ADC_START;
+                              #endif
+ 104   2                      break;  
+ 105   2              case 3:
+ 106   2                      #if D_EnADC3
+ 107   2                      ADC_CONTR = ADC_POWER | ADC_SPEEDLL | R_ADCChannel | ADC_START;
+ 108   2                      #endif
+ 109   2                      break;  
+ 110   2              case 2:
+ 111   2                      #if D_EnADC2
+ 112   2                      ADC_CONTR = ADC_POWER | ADC_SPEEDLL | R_ADCChannel | ADC_START;
+ 113   2                      #endif
+ 114   2                      break;  
+ 115   2              case 1:
+ 116   2                      #if D_EnADC1
+C51 COMPILER V9.00   ADC                                                                   09/03/2017 21:30:28 PAGE 3   
+
+                              ADC_CONTR = ADC_POWER | ADC_SPEEDLL | R_ADCChannel | ADC_START;
+                              #endif
+ 119   2                      break;  
+ 120   2              case 0:
+ 121   2                      #if D_EnADC0
+                              ADC_CONTR = ADC_POWER | ADC_SPEEDLL | R_ADCChannel | ADC_START;
+                              #endif
+ 124   2                      break;          
+ 125   2              default:                
+ 126   2                      break;
+ 127   2                                                                                              
+ 128   2              }               
+ 129   1      
+ 130   1                      
+ 131   1      }
+ 132          /*----------------------------
+ 133          ADC中断服务程序
+ 134          ----------------------------*/
+ 135          void adc_isr() interrupt 5 using 1
+ 136          {
+ 137   1          ADC_CONTR &= !ADC_FLAG;         //清除ADC中断标志
+ 138   1          GetADCresult();
+ 139   1          Flg_ToRunADC=1;
+ 140   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    141    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      9    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,103 @@
+C51 COMPILER V9.00   NRF2401                                                               03/23/2017 01:25:14 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE NRF2401
+OBJECT MODULE PLACED IN .\Objects\NRF2401.obj
+COMPILER INVOKED BY: G:\Keil_v5\C51\BIN\C51.EXE NRF2401.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\N
+                    -RF2401.lst) OBJECT(.\Objects\NRF2401.obj)
+
+line level    source
+
+   1          #include"NRF2401.h"
+   2          
+   3          u8 SPI(u8 byte)         //以下为无线模块的控制程序，比较复杂。SPI模拟程序
+   4          {
+   5   1              u8 i;
+   6   1              for(i=0;i<8;i++)
+   7   1              {
+   8   2                      MDI=(byte&0x80);//单片机输出最高位数据
+   9   2                      SCK=1;          //时钟信号的上升沿后无线模块读取新数据
+  10   2                      byte<<=1;       //数据左移
+  11   2                      byte|=MDO;      //单片机读取数据
+  12   2                      SCK=0;          //时钟信号的下降沿后无线模块输出新数据
+  13   2              }
+  14   1              return byte;
+  15   1      }
+  16          
+  17          void REG_write(u8 address,u8 command)   //写配置寄存器
+  18          {
+  19   1              CSN=0;          //选中无线模块
+  20   1              SPI(0x20+address);      //地址
+  21   1              SPI(command);           //命令
+  22   1              CSN=1;          //停止操作
+  23   1      
+  24   1      }
+  25          
+  26          void FIFO_read(u8 DATA_IN[])            //读取接收数据缓冲区
+  27          {
+  28   1              CSN=0;
+  29   1              SPI(0x61);      //读取命令
+  30   1              DATA_IN[0]=SPI(0);      //读取数据
+  31   1              DATA_IN[1]=SPI(0);
+  32   1              DATA_IN[2]=SPI(0);
+  33   1              DATA_IN[3]=SPI(0);
+  34   1              DATA_IN[4]=SPI(0);
+  35   1              DATA_IN[5]=SPI(0);
+  36   1              CSN=1;
+  37   1      }
+  38          void FIFO_write(u8 DATA_OUT[])
+  39          {
+  40   1              CSN=0;
+  41   1              SPI(0xa0);
+  42   1              SPI(DATA_OUT[0]);
+  43   1              SPI(DATA_OUT[1]);
+  44   1              SPI(DATA_OUT[2]);
+  45   1              SPI(DATA_OUT[3]);
+  46   1              SPI(DATA_OUT[4]);
+  47   1              SPI(DATA_OUT[5]);
+  48   1              CSN=1;
+  49   1      }
+  50          void RX_mode()                                  //将无线模块配置为接收模式
+  51          {
+  52   1              CE=0;           //先关闭模块，才能写命令寄存器
+  53   1              SCK=0;
+  54   1              REG_write(0x00,0x7b); //CRC,8 bit,Power on,RX
+C51 COMPILER V9.00   NRF2401                                                               03/23/2017 01:25:14 PAGE 2   
+
+  55   1              REG_write(0x01,0x00); //不允许自动应答
+  56   1              REG_write(0x02,0x01); //使用P0信道通信，使用默认地址
+  57   1              REG_write(0x04,0x00); //不允许自动应答
+  58   1              REG_write(0x05,64); //使用第64频道，总计128频道，可自定义
+  59   1              REG_write(0x06,0x07); //1Mbps,0dBm
+  60   1              REG_write(0x11,6);//每次信号6字节数据
+  61   1              CE=1; 
+  62   1      }
+  63          
+  64          void TX_mode()                  //设置为发射模式
+  65          {
+  66   1              CE=0;
+  67   1              SCK=0;
+  68   1              REG_write(0x00,0x0a); //CRC,8 bit,Power on,TX
+  69   1              REG_write(0x01,0x00); //unable ACK
+  70   1              REG_write(0x02,0x01); //enable P0
+  71   1              REG_write(0x04,0x00); //unable ACK
+  72   1              REG_write(0x05,0x40); //使用第64通道，可自定义
+  73   1              REG_write(0x06,0x07); //1Mbps,0dBm
+  74   1              REG_write(0x11,0x06);//DATA 6 bytes
+  75   1              CE=1;
+  76   1      }
+  77          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    235    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

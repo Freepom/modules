@@ -1,0 +1,8 @@
+".\Objects\STARTUP.obj",
+".\Objects\main.obj",
+".\Readkey_lib_A01.LIB",
+".\Objects\DispDrv.obj",
+".\Objects\AT24C.obj",
+".\Objects\DS1302.obj" 
+TO ".\Objects\main" 
+PRINT(".\Listings\main.m51") RAMSIZE(256) 

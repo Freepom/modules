@@ -1,0 +1,82 @@
+C51 COMPILER V9.00   PWM_PWM                                                               09/03/2017 21:30:28 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE PWM_PWM
+OBJECT MODULE PLACED IN .\Objects\pwm_pwm.obj
+COMPILER INVOKED BY: G:\Keil_v5\C51\BIN\C51.EXE SRC\pwm_pwm.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\SRC) DEBUG OBJECTEXTEND 
+                    -PRINT(.\Listings\pwm_pwm.lst) OBJECT(.\Objects\pwm_pwm.obj)
+
+line level    source
+
+   1          
+   2          #include "pwm_pwm.h"
+   3          
+   4          
+   5          bit Flg_TrigeSta1,Flg_TrigeSta2,Flg_TrigeSta3,Flg_TrigeSta4;
+   6          
+   7          void Init_PWM()
+   8          {
+   9   1          PIN_SW2 |= 0x80;                //使能访问XSFR
+  10   1          PWMCFG = 0x00;                  //配置PWM的输出初始电平为低电平
+  11   1          PWMCKS = 0x00;                  //选择PWM的时钟为Fosc/(0+1)
+  12   1          PWMC = CYCLE;                   //设置PWM周期
+  13   1      //------------------------------------------------------------------------   RED
+  14   1          PWM2T1 = 0x0000;                //设置PWM2第1次反转的PWM计数
+  15   1          PWM2T2 = PWM_DUTY;    //设置PWM2第2次反转的PWM计数
+  16   1                                          //占空比为(PWM2T2-PWM2T1)/PWMC
+  17   1          PWM2CR = 0x08;                  //选择PWM2输出到P3.7(PWM2CR.3=0),不使能PWM2中断//P2.7(PWM2CR.3=1)
+  18   1      //------------------------------------------------------------------------   GREEND 
+  19   1          PWM3T1 = 0x0000;                //设置PWM3第1次反转的PWM计数
+  20   1          PWM3T2 = PWM_DUTY;    //设置PWM3第2次反转的PWM计数
+  21   1                                          //占空比为(PWM3T2-PWM3T1)/PWMC
+  22   1          PWM3CR = 0x08;                  //选择PWM2输出到P2.1(PWM2CR.3=0),不使能PWM2中断//P4.5(PWM2CR.3=1)
+  23   1          
+  24   1      //------------------------------------------------------------------------    
+  25   1      //    PWM4T1 = 0x0000;                //设置PWM2第1次反转的PWM计数
+  26   1      //    PWM4T2 = CYCLE * DUTY / 100;    //设置PWM2第2次反转的PWM计数
+  27   1      //                                    //占空比为(PWM2T2-PWM2T1)/PWMC
+  28   1      //    PWM4CR = 0x00;                  //选择PWM2输出到P2.2,不使能PWM2中断//P4.4
+  29   1      //------------------------------------------------------------------------    
+  30   1      //    PWM5T1 = 0x0000;                //设置PWM3第1次反转的PWM计数
+  31   1      //    PWM5T2 = CYCLE * DUTY / 100;    //设置PWM3第2次反转的PWM计数
+  32   1      //                                    //占空比为(PWM3T2-PWM3T1)/PWMC
+  33   1      //    PWM5CR = 0x00;                  //选择PWM2输出到P2.3,不使能PWM2中断//P4.2
+  34   1      ////------------------------------------------------------------------------    
+  35   1      //    PWM6T1 = 0x0000;                //设置PWM3第1次反转的PWM计数
+  36   1      //    PWM6T2 = CYCLE * DUTY / 100;    //设置PWM3第2次反转的PWM计数
+  37   1      //                                    //占空比为(PWM3T2-PWM3T1)/PWMC
+  38   1      //    PWM6CR = 0x00;                  //选择PWM2输出到P2.3,不使能PWM2中断//P4.2
+  39   1      //------------------------------------------------------------------------   BLURE  
+  40   1          PWM7T1 = 0x0000;                //设置PWM7第1次反转的PWM计数
+  41   1          PWM7T2 = PWM_DUTY;    //设置PWM7第2次反转的PWM计数
+  42   1                                          //占空比为(PWM7T2-PWM7T1)/PWMC
+  43   1          PWM7CR = 0x08;                  ////选择PWM7输出到P1.7(PWM7CR.3=0),不使能PWM2中断//P0.6(PWM7CR.3=1)   
+             -  
+  44   1      //------------------------------------------------------------------------             
+  45   1          PWMCR = D_EnPWM2|D_EnPWM3|D_EnPWM4|D_EnPWM5|D_EnPWM6|D_EnPWM7;//PWM使能：PWM2.0 PWM3.1 PWM4.2 PWM5.3 P
+             -WM6.4 PWM7.5
+  46   1      //    PWMCR |= D_EnPWMMode;                  //使能PWM模块
+  47   1              PWMCR &= ~D_EnPWMMode;
+  48   1          PIN_SW2 &= ~0x80;   
+  49   1          
+  50   1      //      Pin_OutTrige1=1;
+  51   1      //      Pin_OutTrige2=1;
+  52   1      //      Pin_OutTrige3=1;
+C51 COMPILER V9.00   PWM_PWM                                                               09/03/2017 21:30:28 PAGE 2   
+
+  53   1      //      Pin_OutTrige4=1;
+  54   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     79    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      4    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,651 @@
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE CLOCKTIMER
+OBJECT MODULE PLACED IN .\Objects\ClockTimer.obj
+COMPILER INVOKED BY: G:\Keil_v5\C51\BIN\C51.EXE SRC\ClockTimer.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\SRC) DEBUG OBJECTEXTE
+                    -ND PRINT(.\Listings\ClockTimer.lst) OBJECT(.\Objects\ClockTimer.obj)
+
+line level    source
+
+   1          
+   2          #include "ClockTimer.h"
+   3          #include "main.h"
+   4          
+   5          u8 R_ModeBak;
+   6          u8 R_SetQuit;
+   7          u8 R_SetMode=D_SetMode_Timer;
+   8          u8 R_SetTmMode=D_SetMode_Sec;
+   9          u8 R_AlarmMode=D_Alarm1;
+  10          u8 R_AlarmSetMode=D_AlarmSet_TmMin;
+  11          u8 R_PanMode=D_PanMode_Clock;
+  12          u8 AlarmSetDay_Tab[4];
+  13          u8 idata AlarmTm_Tab[4][5];//[0]分钟[1]时钟[2]星期[3]铃声[4]=0关闭闹钟=1打开闹钟
+  14          
+  15          void SelectPanMode(bit Flg_Sta,bit Flg_StaZY)//选择要设置的闹钟 Flg_Sta=1向上移，否则向下移
+  16          {
+  17   1              if(Flg_StaZY)
+  18   1                      {
+  19   2                      R_PanMode=D_SetMode_Quit;
+  20   2                      return;         
+  21   2                      }
+  22   1              switch(R_PanMode)
+  23   1              {
+  24   2                      case D_PanMode_Clock:
+  25   2                                      if(Flg_Sta)
+  26   2                                              {
+  27   3                                              R_PanMode=D_PanMode_CM; 
+  28   3                                              }
+  29   2                                              else
+  30   2                                                      {
+  31   3                                                      R_PanMode=D_PanMode_Music;      
+  32   3                                                      }
+  33   2                              break;
+  34   2                      case D_PanMode_Music:
+  35   2                                      if(Flg_Sta)
+  36   2                                              {
+  37   3                                              R_PanMode=D_PanMode_Clock;      
+  38   3                                              }
+  39   2                                              else
+  40   2                                                      {
+  41   3                                                      R_PanMode=D_PanMode_CM; 
+  42   3                                                      }                       
+  43   2                              break;  
+  44   2                      case D_PanMode_CM:
+  45   2                                      if(Flg_Sta)
+  46   2                                              {
+  47   3                                              R_PanMode=D_PanMode_Music;      
+  48   3                                              }
+  49   2                                              else
+  50   2                                                      {
+  51   3                                                      R_PanMode=D_PanMode_Clock;      
+  52   3                                                      }                       
+  53   2                              break;  
+  54   2      //              case D_PanMode_5:
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 2   
+
+  55   2      //                              if(Flg_Sta)
+  56   2      //                                      {
+  57   2      //                                      R_SetMode=D_Alarm3;     
+  58   2      //                                      }
+  59   2      //                                      else
+  60   2      //                                              {
+  61   2      //                                              R_SetMode=D_SetMode_Quit;       
+  62   2      //                                              }                       
+  63   2                              break;
+  64   2                      case D_SetMode_Quit:
+  65   2                                      if(Flg_Sta)
+  66   2                                              {
+  67   3                                              R_PanMode=D_PanMode_Clock;      
+  68   3                                              }
+  69   2                                              else
+  70   2                                                      {
+  71   3                                                      R_PanMode=D_PanMode_Clock;      
+  72   3                                                      }                       
+  73   2                              break;                                  
+  74   2                      default:
+  75   2                              
+  76   2                              break;          
+  77   2              }               
+  78   1      }
+  79          void SetAlarmTimer(bit Flg_Sta)//选择要设置的闹钟 Flg_Sta=1向上移，否则向下移
+  80          {
+  81   1              switch(R_AlarmSetMode)
+  82   1              {
+  83   2                      case 0:
+  84   2      
+  85   2                              break;
+  86   2                      case D_AlarmSet_TmMin:
+  87   2                                      if(Flg_Sta)
+  88   2                                              {
+  89   3                                              AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1] ++;        
+  90   3                                              }
+  91   2                                              else
+  92   2                                                      {
+  93   3                                                      if(AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1])        
+  94   3                                                      AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1] --;        
+  95   3                                                      }
+  96   2                              break;  
+  97   2                      case D_AlarmSet_TmHour:
+  98   2                                      if(Flg_Sta)
+  99   2                                              {
+ 100   3                                              AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1] ++;        
+ 101   3                                              }
+ 102   2                                              else
+ 103   2                                                      {
+ 104   3                                                      if(AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1])        
+ 105   3                                                      AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1] --;        
+ 106   3                                                      }
+ 107   2                              break;  
+ 108   2                      case D_AlarmSet_TmDay:
+ 109   2                                      if(Flg_Sta)
+ 110   2                                              {
+ 111   3                                              if(AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1]<7)      
+ 112   3                                              AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1] ++;        
+ 113   3                                              }
+ 114   2                                              else
+ 115   2                                                      {
+ 116   3                                                      if(AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1])
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 3   
+
+ 117   3                                                      AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1] --;        
+ 118   3                                                      }
+ 119   2                              break;
+ 120   2                      case D_AlarmSet_TmBell:
+ 121   2                                      if(Flg_Sta)
+ 122   2                                              {
+ 123   3                                              AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1] ++;        
+ 124   3                                              }
+ 125   2                                              else
+ 126   2                                                      {
+ 127   3                                                      if(AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1])        
+ 128   3                                                      AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1] --;        
+ 129   3                                                      }
+ 130   2                              break;  
+ 131   2                      case D_AlarmSet_TmONOFF:
+ 132   2                                      if(Flg_Sta)
+ 133   2                                              {
+ 134   3                                              AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1] =1;        
+ 135   3                                              }
+ 136   2                                              else
+ 137   2                                                      {
+ 138   3                                                      AlarmTm_Tab[R_AlarmMode-1][R_AlarmSetMode-1] =0;        
+ 139   3                                                      }
+ 140   2                              break;                                          
+ 141   2                      case D_SetMode_Quit:
+ 142   2      
+ 143   2                              break;                                  
+ 144   2                      default:                        
+ 145   2                              break;          
+ 146   2              }       
+ 147   1              
+ 148   1      }
+ 149          void SelectAlarmSet(bit Flg_Sta)//选择要设置的闹钟 Flg_Sta=1向上移，否则向下移
+ 150          {
+ 151   1              switch(R_AlarmSetMode)
+ 152   1              {
+ 153   2                      case 0:
+ 154   2                                      if(Flg_Sta)
+ 155   2                                              {
+ 156   3                                              R_AlarmSetMode=D_SetMode_Quit;  
+ 157   3                                              }
+ 158   2                                              else
+ 159   2                                                      {
+ 160   3                                                      R_AlarmSetMode=D_SetMode_Alarm; 
+ 161   3                                                      }
+ 162   2                              break;
+ 163   2                      case D_AlarmSet_TmMin:
+ 164   2                                      if(Flg_Sta)
+ 165   2                                              {
+ 166   3                                              R_AlarmSetMode=D_AlarmSet_TmHour;       
+ 167   3                                              }
+ 168   2                                              else
+ 169   2                                                      {
+ 170   3                                                      R_AlarmSetMode=D_SetMode_Quit;  
+ 171   3                                                      }
+ 172   2                              break;  
+ 173   2                      case D_AlarmSet_TmHour:
+ 174   2                                      if(Flg_Sta)
+ 175   2                                              {
+ 176   3                                              R_AlarmSetMode=D_AlarmSet_TmDay;
+ 177   3                                              AlarmTm_Tab[0][2]=1;
+ 178   3                                              AlarmTm_Tab[1][2]=1;
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 4   
+
+ 179   3                                              AlarmTm_Tab[2][2]=1;
+ 180   3                                              AlarmTm_Tab[3][2]=1;    
+ 181   3                                              }
+ 182   2                                              else
+ 183   2                                                      {
+ 184   3                                                      R_AlarmSetMode=D_AlarmSet_TmMin;        
+ 185   3                                                      }
+ 186   2                              break;  
+ 187   2                      case D_AlarmSet_TmDay:
+ 188   2                                      if(Flg_Sta)
+ 189   2                                              {
+ 190   3                                              R_AlarmSetMode=D_AlarmSet_TmBell;       
+ 191   3                                              }
+ 192   2                                              else
+ 193   2                                                      {
+ 194   3                                                      R_AlarmSetMode=D_AlarmSet_TmHour;       
+ 195   3                                                      }
+ 196   2                                      AlarmTm_Tab[0][2]=0;
+ 197   2                                      AlarmTm_Tab[1][2]=0;
+ 198   2                                      AlarmTm_Tab[2][2]=0;
+ 199   2                                      AlarmTm_Tab[3][2]=0;                                            
+ 200   2                              break;
+ 201   2                      case D_AlarmSet_TmBell:
+ 202   2                                      if(Flg_Sta)
+ 203   2                                              {
+ 204   3                                              R_AlarmSetMode=D_AlarmSet_TmONOFF;      
+ 205   3                                              }
+ 206   2                                              else
+ 207   2                                                      {
+ 208   3                                                      R_AlarmSetMode=D_AlarmSet_TmDay;
+ 209   3                                                      AlarmTm_Tab[0][2]=1;
+ 210   3                                                      AlarmTm_Tab[1][2]=1;
+ 211   3                                                      AlarmTm_Tab[2][2]=1;
+ 212   3                                                      AlarmTm_Tab[3][2]=1;                                                            
+ 213   3                                                      }
+ 214   2                              break;  
+ 215   2                      case D_AlarmSet_TmONOFF:
+ 216   2                                      if(Flg_Sta)
+ 217   2                                              {
+ 218   3                                              R_AlarmSetMode=D_SetMode_Quit;  
+ 219   3                                              }
+ 220   2                                              else
+ 221   2                                                      {
+ 222   3                                                      R_AlarmSetMode=D_AlarmSet_TmBell;       
+ 223   3                                                      }
+ 224   2                              break;                                          
+ 225   2                      case D_SetMode_Quit:
+ 226   2                                      if(Flg_Sta)
+ 227   2                                              {
+ 228   3                                              R_AlarmSetMode=D_AlarmSet_TmMin;        
+ 229   3                                              }
+ 230   2                                              else
+ 231   2                                                      {
+ 232   3                                                      R_AlarmSetMode=D_AlarmSet_TmBell;       
+ 233   3                                                      }
+ 234   2                              break;                                  
+ 235   2                      default:                        
+ 236   2                              break;          
+ 237   2              }       
+ 238   1      }
+ 239          void ChangeSetMode(bit Flg_Sta)//选择要设置的闹钟 Flg_Sta=1向上移，否则向下移
+ 240          {
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 5   
+
+ 241   1              switch(R_SetMode)
+ 242   1              {
+ 243   2                      case D_SetMode_Timer:
+ 244   2                                      if(Flg_Sta)
+ 245   2                                              {
+ 246   3                                              R_SetMode=D_SetMode_Quit;       
+ 247   3                                              }
+ 248   2                                              else
+ 249   2                                                      {
+ 250   3                                                      R_SetMode=D_SetMode_Alarm;      
+ 251   3                                                      }
+ 252   2                              break;
+ 253   2                      case D_SetMode_Alarm:
+ 254   2                                      if(Flg_Sta)
+ 255   2                                              {
+ 256   3                                              R_SetMode=D_SetMode_Timer;      
+ 257   3                                              }
+ 258   2                                              else
+ 259   2                                                      {
+ 260   3                                                      R_SetMode=D_SetMode_Pan;        
+ 261   3                                                      }                       
+ 262   2                              break;  
+ 263   2                      case D_SetMode_Pan:
+ 264   2                                      if(Flg_Sta)
+ 265   2                                              {
+ 266   3                                              R_SetMode=D_SetMode_Alarm;      
+ 267   3                                              }
+ 268   2                                              else
+ 269   2                                                      {
+ 270   3                                                      R_SetMode=D_SetMode_Quit;       
+ 271   3                                                      }                       
+ 272   2      //                      break;  
+ 273   2      //              case D_SetMode_4:
+ 274   2      //                              if(Flg_Sta)
+ 275   2      //                                      {
+ 276   2      //                                      R_SetMode=D_Alarm3;     
+ 277   2      //                                      }
+ 278   2      //                                      else
+ 279   2      //                                              {
+ 280   2      //                                              R_SetMode=D_SetMode_Quit;       
+ 281   2      //                                              }                       
+ 282   2                              break;
+ 283   2                      case D_SetMode_Quit:
+ 284   2                                      if(Flg_Sta)
+ 285   2                                              {
+ 286   3                                              R_SetMode=D_SetMode_Timer;      
+ 287   3                                              }
+ 288   2                                              else
+ 289   2                                                      {
+ 290   3                                                      R_SetMode=D_SetMode_Timer;      
+ 291   3                                                      }                       
+ 292   2                              break;                                  
+ 293   2                      default:
+ 294   2                              
+ 295   2                              break;          
+ 296   2              }                                                                                                                                       
+ 297   1      }
+ 298          //      switch(R_SetTmMode)
+ 299          //      {
+ 300          //              case D_Alarm1:
+ 301          //
+ 302          //                      break;
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 6   
+
+ 303          //              case D_Alarm2:
+ 304          //                      
+ 305          //                      break;  
+ 306          //              case D_Alarm3:
+ 307          //                      
+ 308          //                      break;  
+ 309          //              case D_Alarm4:
+ 310          //                      
+ 311          //                      break;
+ 312          //              case D_SetMode_Quit:
+ 313          //                      
+ 314          //                      break;                                  
+ 315          //              default:
+ 316          //                      
+ 317          //                      break;          
+ 318          //      }
+ 319          void SelectAlarm(bit Flg_Sta)//选择要设置的闹钟 Flg_Sta=1向上移，否则向下移
+ 320          {
+ 321   1              switch(R_AlarmMode)
+ 322   1              {
+ 323   2                      case D_Alarm1:
+ 324   2                                      if(Flg_Sta)
+ 325   2                                              {
+ 326   3                                              R_AlarmMode=D_SetMode_Quit;     
+ 327   3                                              }
+ 328   2                                              else
+ 329   2                                                      {
+ 330   3                                                      R_AlarmMode=D_Alarm2;   
+ 331   3                                                      }
+ 332   2                              break;
+ 333   2                      case D_Alarm2:
+ 334   2                                      if(Flg_Sta)
+ 335   2                                              {
+ 336   3                                              R_AlarmMode=D_Alarm1;   
+ 337   3                                              }
+ 338   2                                              else
+ 339   2                                                      {
+ 340   3                                                      R_AlarmMode=D_Alarm3;   
+ 341   3                                                      }                       
+ 342   2                              break;  
+ 343   2                      case D_Alarm3:
+ 344   2                                      if(Flg_Sta)
+ 345   2                                              {
+ 346   3                                              R_AlarmMode=D_Alarm2;   
+ 347   3                                              }
+ 348   2                                              else
+ 349   2                                                      {
+ 350   3                                                      R_AlarmMode=D_Alarm4;   
+ 351   3                                                      }                       
+ 352   2                              break;  
+ 353   2                      case D_Alarm4:
+ 354   2                                      if(Flg_Sta)
+ 355   2                                              {
+ 356   3                                              R_AlarmMode=D_Alarm3;   
+ 357   3                                              }
+ 358   2                                              else
+ 359   2                                                      {
+ 360   3                                                      R_AlarmMode=D_SetMode_Quit;     
+ 361   3                                                      }                       
+ 362   2                              break;
+ 363   2                      case D_SetMode_Quit:
+ 364   2                                      if(Flg_Sta)
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 7   
+
+ 365   2                                              {
+ 366   3                                              R_AlarmMode=D_Alarm1;   
+ 367   3                                              }
+ 368   2                                              else
+ 369   2                                                      {
+ 370   3                                                      R_AlarmMode=D_Alarm1;   
+ 371   3                                                      }                       
+ 372   2                              break;                                  
+ 373   2                      default:
+ 374   2                              
+ 375   2                              break;          
+ 376   2              }                                                                                                                                       
+ 377   1      }
+ 378          void ChangeSetTmMode(bit Flg_Sta)
+ 379          {
+ 380   1              switch(R_SetTmMode)
+ 381   1              {
+ 382   2                      case 0:
+ 383   2                                      if(Flg_Sta)
+ 384   2                                              R_SetTmMode=D_SetMode_Sec;
+ 385   2                                              else
+ 386   2                                                      R_SetTmMode=D_SetMode_Quit;
+ 387   2                              break;          
+ 388   2                      case D_SetMode_Sec:
+ 389   2                                      if(Flg_Sta)
+ 390   2                                              R_SetTmMode=D_SetMode_Min;
+ 391   2                                              else
+ 392   2                                                      R_SetTmMode=D_SetMode_Quit;
+ 393   2                              break;  
+ 394   2                      case D_SetMode_Min:
+ 395   2                                      if(Flg_Sta)
+ 396   2                                              R_SetTmMode=D_SetMode_Hour;
+ 397   2                                              else
+ 398   2                                                      R_SetTmMode=D_SetMode_Sec;
+ 399   2                              break;  
+ 400   2                      case D_SetMode_Hour:
+ 401   2                                      if(Flg_Sta)
+ 402   2                                              R_SetTmMode=D_SetMode_Data;
+ 403   2                                              else
+ 404   2                                                      R_SetTmMode=D_SetMode_Min;
+ 405   2                              break;  
+ 406   2                      case D_SetMode_Data:
+ 407   2                                      if(Flg_Sta)
+ 408   2                                              R_SetTmMode=D_SetMode_Mon;
+ 409   2                                              else
+ 410   2                                                      R_SetTmMode=D_SetMode_Hour;
+ 411   2                              break;  
+ 412   2                      case D_SetMode_Mon:
+ 413   2                                      if(Flg_Sta)
+ 414   2                                              R_SetTmMode=D_SetMode_Year;
+ 415   2                                              else
+ 416   2                                                      R_SetTmMode=D_SetMode_Data;
+ 417   2                              break;  
+ 418   2                      case D_SetMode_Year:
+ 419   2                                      if(Flg_Sta)
+ 420   2                                              R_SetTmMode=D_SetMode_Day;
+ 421   2                                              else
+ 422   2                                                      R_SetTmMode=D_SetMode_Mon;
+ 423   2                              break;
+ 424   2                      case D_SetMode_Day:
+ 425   2                                      if(Flg_Sta)
+ 426   2                                              R_SetTmMode=D_SetMode_Quit;
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 8   
+
+ 427   2                                              else
+ 428   2                                                      R_SetTmMode=D_SetMode_Year;
+ 429   2                              break;
+ 430   2                      case D_SetMode_Quit:
+ 431   2                                      if(Flg_Sta)
+ 432   2                                              R_SetTmMode=D_SetMode_Sec;
+ 433   2                                              else
+ 434   2                                                      R_SetTmMode=D_SetMode_Day;
+ 435   2      //                              R_MainMode=D_MMode_Set;
+ 436   2                              break;                          
+ 437   2                      default:                        
+ 438   2                              break;                                                                                                                                                                          
+ 439   2              }       
+ 440   1      }
+ 441          void SetTimer(bit Flg_AddDec)
+ 442          {
+ 443   1              u8 Temp;
+ 444   1              Ds1302_Write_Byte(ds1302_control_add,0x00);                     //关闭写保护 
+ 445   1      //      Ds1302_Write_Byte(ds1302_sec_add,0x80);                         //暂停  
+ 446   1              switch(R_SetTmMode)
+ 447   1              {
+ 448   2                      case D_SetMode_Sec:
+ 449   2                                      if(Flg_AddDec)
+ 450   2                                              {
+ 451   3                                              if(time_buf1[6]==59)
+ 452   3                                                      {
+ 453   4                                                      break;  
+ 454   4                                                      }       
+ 455   3                                              time_buf1[6]++; 
+ 456   3                                              }                                       
+ 457   2                                              else
+ 458   2                                                      {
+ 459   3                                                      if(time_buf1[6]==0)
+ 460   3                                                              {
+ 461   4                                                              break;  
+ 462   4                                                              }       
+ 463   3                                                      time_buf1[6]--;         
+ 464   3                                                      }
+ 465   2                                                      
+ 466   2                                      Temp=time_buf1[6]/10;
+ 467   2                                      time_buf[6]=time_buf1[6]%10;
+ 468   2                                      time_buf[6]=time_buf[6]+Temp*16;
+ 469   2                                      Ds1302_Write_Byte(R_SetTmMode,time_buf[6]);
+ 470   2                              break;  
+ 471   2                      case D_SetMode_Min:
+ 472   2                                      if(Flg_AddDec)
+ 473   2                                              {
+ 474   3                                              if(time_buf1[5]==59)
+ 475   3                                                      {
+ 476   4                                                      break;  
+ 477   4                                                      }       
+ 478   3                                              time_buf1[5]++; 
+ 479   3                                              }                                       
+ 480   2                                              else
+ 481   2                                                      {
+ 482   3                                                      if(time_buf1[5]==0)
+ 483   3                                                              {
+ 484   4                                                              break;  
+ 485   4                                                              }       
+ 486   3                                                      time_buf1[5]--;         
+ 487   3                                                      }
+ 488   2                                      Temp=time_buf1[5]/10;
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 9   
+
+ 489   2                                      time_buf[5]=time_buf1[5]%10;
+ 490   2                                      time_buf[5]=time_buf[5]+Temp*16;
+ 491   2                                      Ds1302_Write_Byte(R_SetTmMode,time_buf[5]);
+ 492   2                              break;  
+ 493   2                      case D_SetMode_Hour:
+ 494   2                                      if(Flg_AddDec)
+ 495   2                                              {
+ 496   3                                              if(time_buf1[4]==23)
+ 497   3                                                      {
+ 498   4                                                      break;  
+ 499   4                                                      }       
+ 500   3                                              time_buf1[4]++; 
+ 501   3                                              }                                       
+ 502   2                                              else
+ 503   2                                                      {
+ 504   3                                                      if(time_buf1[4]==0)
+ 505   3                                                              {
+ 506   4                                                              break;  
+ 507   4                                                              }       
+ 508   3                                                      time_buf1[4]--;         
+ 509   3                                                      }                                               
+ 510   2                                      Temp=time_buf1[4]/10;
+ 511   2                                      time_buf[4]=time_buf1[4]%10;
+ 512   2                                      time_buf[4]=time_buf[4]+Temp*16;
+ 513   2                                      Ds1302_Write_Byte(R_SetTmMode,time_buf[4]);
+ 514   2                              break;  
+ 515   2                      case D_SetMode_Data:
+ 516   2                                      if(Flg_AddDec)
+ 517   2                                              {
+ 518   3                                              if(time_buf1[3]==31)
+ 519   3                                                      {
+ 520   4                                                      break;  
+ 521   4                                                      }       
+ 522   3                                              time_buf1[3]++; 
+ 523   3                                              }                                       
+ 524   2                                              else
+ 525   2                                                      {
+ 526   3                                                      if(time_buf1[3]==1)
+ 527   3                                                              {
+ 528   4                                                              break;  
+ 529   4                                                              }       
+ 530   3                                                      time_buf1[3]--;         
+ 531   3                                                      }                                               
+ 532   2                                      Temp=time_buf1[3]/10;
+ 533   2                                      time_buf[3]=time_buf1[3]%10;
+ 534   2                                      time_buf[3]=time_buf[3]+Temp*16;
+ 535   2                                      Ds1302_Write_Byte(R_SetTmMode,time_buf[3]);
+ 536   2                              break;  
+ 537   2                      case D_SetMode_Mon:
+ 538   2                                      if(Flg_AddDec)
+ 539   2                                              {
+ 540   3                                              if(time_buf1[2]==12)
+ 541   3                                                      {
+ 542   4                                                      break;  
+ 543   4                                                      }       
+ 544   3                                              time_buf1[2]++; 
+ 545   3                                              }                                       
+ 546   2                                              else
+ 547   2                                                      {
+ 548   3                                                      if(time_buf1[2]==0)
+ 549   3                                                              {
+ 550   4                                                              break;  
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 10  
+
+ 551   4                                                              }       
+ 552   3                                                      time_buf1[2]--;         
+ 553   3                                                      }                                               
+ 554   2                                      Temp=time_buf1[2]/10;
+ 555   2                                      time_buf[2]=time_buf1[2]%10;
+ 556   2                                      time_buf[2]=time_buf[2]+Temp*16;
+ 557   2                                      Ds1302_Write_Byte(R_SetTmMode,time_buf[2]);
+ 558   2                              break;  
+ 559   2                      case D_SetMode_Year:
+ 560   2                                      if(Flg_AddDec)
+ 561   2                                              {
+ 562   3      //                                      if(time_buf1[1]==59)
+ 563   3      //                                              {
+ 564   3      //                                              break;  
+ 565   3      //                                              }       
+ 566   3                                              time_buf1[1]++; 
+ 567   3                                              }                                       
+ 568   2                                              else
+ 569   2                                                      {
+ 570   3      //                                              if(time_buf1[1]==0)
+ 571   3      //                                                      {
+ 572   3      //                                                      break;  
+ 573   3      //                                                      }       
+ 574   3                                                      time_buf1[1]--;         
+ 575   3                                                      }                                               
+ 576   2                                      Temp=time_buf1[1]/10;
+ 577   2                                      time_buf[1]=time_buf1[1]%10;
+ 578   2                                      time_buf[1]=time_buf[1]+Temp*16;
+ 579   2                                      Ds1302_Write_Byte(R_SetTmMode,time_buf[1]);
+ 580   2                              break;
+ 581   2                      case D_SetMode_Day:
+ 582   2                                      if(Flg_AddDec)
+ 583   2                                              {
+ 584   3                                              if(time_buf1[7]==6)
+ 585   3                                                      {
+ 586   4                                                      break;  
+ 587   4                                                      }       
+ 588   3                                              time_buf1[7]++; 
+ 589   3                                              }                                       
+ 590   2                                              else
+ 591   2                                                      {
+ 592   3                                                      if(time_buf1[7]==0)
+ 593   3                                                              {
+ 594   4                                                              break;  
+ 595   4                                                              }       
+ 596   3                                                      time_buf1[7]--;         
+ 597   3                                                      }                                               
+ 598   2                                      Temp=time_buf1[7]/10;
+ 599   2                                      time_buf[7]=time_buf1[7]%10;
+ 600   2                                      time_buf[7]=time_buf[7]+Temp*16;
+ 601   2                                      Ds1302_Write_Byte(R_SetTmMode,time_buf[7]);
+ 602   2                              break;  
+ 603   2                      default:                        
+ 604   2                              break;                                                                                                                                                                          
+ 605   2              }       
+ 606   1              Ds1302_Write_Byte(ds1302_control_add,0x80);                     //打开写保护 
+ 607   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    964    ----
+   CONSTANT SIZE    =   ----    ----
+C51 COMPILER V9.00   CLOCKTIMER                                                            09/03/2017 21:30:28 PAGE 11  
+
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     11       1
+   IDATA SIZE       =     20    ----
+   BIT SIZE         =   ----       8
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

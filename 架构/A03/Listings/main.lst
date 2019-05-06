@@ -1,0 +1,1052 @@
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: G:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(9,SPEED) BROWSE INCDIR(.\SRC) DEBUG OBJECTEXTEND PRINT(.
+                    -\Listings\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          //-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   2          //项目名称：软件架构DEMO
+   3          //开发人员：林其平
+   4          //联系方式：doit0827@foxmail.com/15915979843
+   5          //开发环境：C51语言
+   6          //开发工具：keil-V5
+   7          //适用MCU型号：STC15W**
+   8          //软件版本：A03
+   9          //更新日期：2017-10-29 17:21:52
+  10          //更新内容：
+  11          //--------1、子程序命名 2、添加串口通讯内容 3、完善说明注释
+  12          //--------
+  13          //--------
+  14          //备注：
+  15          //              晶振频率：33.1776M Hz
+  16          //              串口波特率：460800Bps
+  17          //              
+  18          //
+  19          //-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  20          #include "main.h"
+  21          #include "display.h"
+  22          #include "ReadKey.h"
+  23          #include "eerom.h"
+  24          //-----------------主循环架构的定义-----------------------------------
+  25          
+  26          sbit Pin_Relay1=P3^5;//
+  27          sbit Pin_Relay2=P3^4;//
+  28          sbit Pin_Relay3=P3^3;//
+  29          
+  30          u8 R_RlDelayOpen;
+  31          
+  32          u16 R_MainTemper;
+  33          //u8    R_TimerMSCnt;
+  34          u8      R_2ms=0;//2ms计时
+  35          bit     Flg_2ms=0;
+  36          bit     Flg_500MsFlash;
+  37          char    R_JmpmsCnt=0;
+  38          
+  39          u8 idata RxUART_Tab[30];
+  40          u8 idata TxUART_Tab[30]; 
+  41          bit Flg_StartUART;
+  42          
+  43          char    R_WkMode;
+  44          #define D_WkMode_Auto   0
+  45          #define D_WkMode_Hand   1
+  46          #define D_WkMode_Error  2
+  47          #define D_WkMode4       3
+  48          #define D_WkMode5       4
+  49          #define D_WkMode6       5
+  50          
+  51          
+  52          
+  53          u8 bdata R_Flag;        //22
+  54          sbit Flg_AutoMode=R_Flag^0;     //=1：自动模式，=0：手动模式
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 2   
+
+  55          sbit Flg_SetMode=R_Flag^1;      //=1：设置模式，=0：非设置模式
+  56          sbit Flg_RelayWk1=R_Flag^2;             //继电器1
+  57          sbit Flg_RelayWk2=R_Flag^3;             //继电器1
+  58          sbit Flg_RelayWk3=R_Flag^4;             //继电器1
+  59          sbit Flg_ToAdd=R_Flag^5;                //
+  60          sbit Flg_RelayWkBak1=R_Flag^6;          //
+  61          sbit Flg_RelayWkBak2=R_Flag^7;          //
+  62          
+  63          //----------------------------------------------------------
+  64          /**********************************************************************************/
+  65          //----按键扫描、按键检测、按键处理的定义-----------------------------------
+  66          
+  67          sbit Pin_TimerSet       = P3^1;
+  68          sbit Pin_KeyDown        = P2^1;
+  69          sbit Pin_KeyUp          = P3^0;
+  70          sbit Pin_Key3           = P1^7;
+  71          sbit Pin_Key4           = P5^4;
+  72          
+  73          #define nokey           0
+  74          #define D_keyUp         1
+  75          #define D_keyDown       2
+  76          #define D_key3          3
+  77          #define D_key4          4
+  78          #define D_keyTimerSet   5
+  79          #define D_keyRelease    6
+  80          
+  81          
+  82          //----------------------------------------------------------
+  83          
+  84          //----------------------------------------------------------
+  85          u8 R_Second,R_SecondDS,R_Minute,R_Hour;
+  86          bit Flg_Second;
+  87          bit Flg_ToErrom;
+  88          u8 R_DelaySave;
+  89          
+  90          
+  91          u8 R_Protect;   //40
+  92          #define D_Nomal                 0
+  93          #define D_Protect_E1    1
+  94          #define D_Protect_E2    2
+  95          #define D_Protect_E3    3
+  96          #define D_Protect_E4    4
+  97          #define D_Protect_E5    5
+  98          #define D_Protect_E6    6
+  99          #define D_Protect_E7    7
+ 100          
+ 101          u8 bdata R_Flag2;       //41
+ 102          sbit Flg_E1=R_Flag2^0;
+ 103          sbit Flg_E2=R_Flag2^1;
+ 104          sbit Flg_E3=R_Flag2^2;
+ 105          sbit Flg_E4=R_Flag2^3;
+ 106          sbit Flg_E5=R_Flag2^4;
+ 107          sbit Flg_E6=R_Flag2^5;
+ 108          sbit Flg_E7=R_Flag2^6;
+ 109          
+ 110          //----------------------------------------------------------
+ 111          //----------------------------------------------------------
+ 112          //void Delay10us()              //@11.0592MHz
+ 113          //{
+ 114          //      unsigned char i;
+ 115          //
+ 116          //      _nop_();
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 3   
+
+ 117          //      i = 10;
+ 118          //      while (--i);
+ 119          //}
+ 120          //-----------------------------------------
+ 121          //
+ 122          //函数声明
+ 123          //
+ 124          //-----------------------------------------
+ 125          void Recovery();
+ 126          void CheckError();
+ 127          void    ClearData_UART(bit Flg_Sta);
+ 128          void    SendData_UART();
+ 129          void    RecData_UART();
+ 130          void RelayDrv();
+ 131          void SaveDateToErrom();
+ 132          void    DealKey();
+ 133          void    KeyScan();
+ 134          void    UpdateDisplay();
+ 135          void    Timer50msCnt();
+ 136          void    Sys_Initial();
+ 137          //-------------------------------------------
+ 138          /*---------------主循环---------------------
+ 139          //--------------------------------------------
+ 140          /输入：
+ 141          /输出：
+ 142          /备注：
+ 143          /       
+ 144          */
+ 145          //-------------------------------------------
+ 146          main()
+ 147          {
+ 148   1              Sys_Initial();  //定时器初始化
+ 149   1              P1M1&=0x00;//00000011B
+ 150   1              P1M0|=0xff;//00000011B
+ 151   1              P2M1&=~0xc4;//00000011B
+ 152   1              P2M0|=0xc4;//11000100B  
+ 153   1              P5M1&=~0x30;//00000011B
+ 154   1              P5M0|=0x30;//00110000B  
+ 155   1      
+ 156   1      //      if(IapReadByte(0x0000)!=0x55)//保存区域分界线的值
+ 157   1                      {
+ 158   2                      IapEraseSector(0x000);
+ 159   2                      IapProgramByte(0x001,0>>8);     //
+ 160   2                      IapProgramByte(0x002,0);
+ 161   2                      IapProgramByte(0x003,0>>8);     //
+ 162   2                      IapProgramByte(0x004,0);        
+ 163   2                      IapProgramByte(0x005,0>>8);     //
+ 164   2                      IapProgramByte(0x006,0);
+ 165   2                      IapProgramByte(0x007,0>>8);     //
+ 166   2                      IapProgramByte(0x008,0);        
+ 167   2                      IapProgramByte(0x009,0>>8);     //
+ 168   2                      IapProgramByte(0x00a,0);
+ 169   2                      IapProgramByte(0x00b,0>>8);     //
+ 170   2                      IapProgramByte(0x00c,0);        
+ 171   2                      IapProgramByte(0x00d,00>>8);    //
+ 172   2                      IapProgramByte(0x00e,00);
+ 173   2                      IapProgramByte(0x00f,0);        //
+ 174   2                      IapProgramByte(0x010,0);                                        
+ 175   2                      IapProgramByte(0x011,0);
+ 176   2                      IapProgramByte(0x012,0);
+ 177   2                      IapProgramByte(0x013,0);
+ 178   2                      IapProgramByte(0x000,0x55);
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 4   
+
+ 179   2                      Flg_ToErrom=0;                          
+ 180   2                      }
+ 181   1      //      R_Data_Day      =(u16)IapReadByte(0x0001)>>8|IapReadByte(0x0002);       
+ 182   1      //      R_Data_Min      =(u16)IapReadByte(0x0003)>>8|IapReadByte(0x0004);       
+ 183   1      //      R_Data_V1       =(u16)IapReadByte(0x0005)>>8|IapReadByte(0x0006);       
+ 184   1      //      R_Data_V2       =(u16)IapReadByte(0x0007)>>8|IapReadByte(0x0008);       
+ 185   1      //      R_Data_K        =(u16)IapReadByte(0x0009)>>8|IapReadByte(0x000a);       
+ 186   1      //      R_Data_Frc      =(u16)IapReadByte(0x000b)>>8|IapReadByte(0x000c);       
+ 187   1      //      R_DataTmp_TV    =(u16)IapReadByte(0x000d)>>8|IapReadByte(0x000e);
+ 188   1      //      R_Flag          =IapReadByte(0x000f);
+ 189   1      //      R_SetMode       =IapReadByte(0x0010);
+ 190   1      //      R_NT_V2         =IapReadByte(0x0011);
+ 191   1      //      R_NT_K          =IapReadByte(0x0012);
+ 192   1      //      R_NT_TV         =IapReadByte(0x0013);
+ 193   1              ClrWDT;                         
+ 194   1              while(1)
+ 195   1              {
+ 196   2              ClrWDT; 
+ 197   2              RecData_UART();
+ 198   2              
+ 199   2              DealKey();      //按键处理
+ 200   2              CheckError();
+ 201   2              Recovery();
+ 202   2              RelayDrv();
+ 203   2              
+ 204   2              if(Flg_2ms)     //10毫秒计时处理
+ 205   2                      {
+ 206   3                      Flg_2ms=0;
+ 207   3      
+ 208   3                      if(++R_JmpmsCnt == 10)R_JmpmsCnt=0;
+ 209   3                      switch(R_JmpmsCnt)      //2毫秒分时处理
+ 210   3                              {
+ 211   4                              case    0:
+ 212   4      
+ 213   4                                      break;
+ 214   4                              case    1:
+ 215   4                                              UpdateDisplay();
+ 216   4                                      break;
+ 217   4                              case    2:
+ 218   4                                              SaveDateToErrom();
+ 219   4                                      break;                                                                                          
+ 220   4                              case    3:
+ 221   4      
+ 222   4                                      break;
+ 223   4                              case    4:
+ 224   4      //                                      
+ 225   4                                      break;
+ 226   4                              case    5:
+ 227   4                                              ReadR_KeyValue();       //按键转换
+ 228   4                                      break;
+ 229   4                              case    6:
+ 230   4                                              UpdateDisplay();
+ 231   4                                      break;
+ 232   4                              case    7:
+ 233   4      //                                      
+ 234   4                                              
+ 235   4                                      break;                                                                                          
+ 236   4                              case    8:
+ 237   4                                              CheckError();   
+ 238   4                                      break;
+ 239   4                              case    9:
+ 240   4                                              Timer50msCnt(); //20毫秒计时
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 5   
+
+ 241   4                                      break;
+ 242   4                              default:
+ 243   4                                      break;                                                                                                                          
+ 244   4                              }
+ 245   3                      }       
+ 246   2              }
+ 247   1      }
+ 248          //-------------------------------------------
+ 249          /*---------------定时器中断子程序------------
+ 250          /输入：定时器T0中断
+ 251          /输出：2毫秒标志Flg_2ms=1，按键扫描
+ 252          /备注：定时器0方式2,16位自动重载，定时125us
+ 253          /
+ 254          */
+ 255          //-------------------------------------------
+ 256          void Inter_Timer0()interrupt 1
+ 257          {
+ 258   1              static u8 R_MSCnt=0;
+ 259   1      //      TL0 = 0x9A;             //设置定时初值
+ 260   1      //      TH0 = 0xFA;             //设置定时初值125us
+ 261   1      //      if(Flg_PinSta) 
+ 262   1      //              {
+ 263   1      //              if(R_PinCnt)
+ 264   1      //                      {
+ 265   1      //                      R_PinCnt--;
+ 266   1      //                      Pin_Pluse=!Pin_Pluse;   
+ 267   1      //                      }
+ 268   1      //                      else
+ 269   1      //                              {
+ 270   1      //                              Pin_Pluse=1;    
+ 271   1      //                              }       
+ 272   1      //              }
+ 273   1      
+ 274   1              R_MSCnt++;                              
+ 275   1              if(R_MSCnt == 2000/T0Cycle)
+ 276   1                      {
+ 277   2                      R_MSCnt=0;
+ 278   2                      Flg_2ms=1;      
+ 279   2                      }
+ 280   1              
+ 281   1      //      BeepDrv();
+ 282   1              KeyScan();      //按键扫描
+ 283   1      //      DispDrv();      
+ 284   1              
+ 285   1      }
+ 286          //-------------------------------------------
+ 287          /*---------------串口中断子程序------------
+ 288          /输入：串口中断
+ 289          /输出：
+ 290          /备注：
+ 291          /
+ 292          */
+ 293          //-------------------------------------------
+ 294          void Inter_Serial() interrupt 4
+ 295          {
+ 296   1              unsigned char len, i;
+ 297   1              unsigned int j=0;       
+ 298   1              static u8 R_RCnt;
+ 299   1      //      RI=0;
+ 300   1      //      if(0x7F == SBUF) //? ? ? ? ? ? ?//判断是否为下载流信息
+ 301   1      //      {
+ 302   1      //      IAP_CNTR =IAP_ENABLE; //?//允许IAP, 也就是直接进入下载程序
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 6   
+
+ 303   1      //      // soft_reset();
+ 304   1      //      }
+ 305   1      
+ 306   1              if(RI)//780ms,22MHz 接收一个数据要80us
+ 307   1              {               
+ 308   2                      if(Flg_StartUART==0)
+ 309   2                              {
+ 310   3                              len=SBUF;
+ 311   3                              RI=0;                                   
+ 312   3                              if(len==0xff)
+ 313   3                                      {
+ 314   4                                      R_RCnt++;       
+ 315   4                                      if(R_RCnt==2)
+ 316   4                                              {
+ 317   5                                              Flg_StartUART=1;        
+ 318   5                                              }       
+ 319   4                                      }
+ 320   3                              
+ 321   3                              }
+ 322   2                              else
+ 323   2                                      {
+ 324   3                                              len=SBUF;
+ 325   3                                              RI=0;                                           
+ 326   3                                              for(i=0;i<len;i++)
+ 327   3                                              {
+ 328   4                                                      while(!RI)
+ 329   4                                                      {
+ 330   5                                                              j++;
+ 331   5                                                              if(j>200)
+ 332   5                                                              {
+ 333   6                                                                  break;
+ 334   6                                                              }
+ 335   5                                                      }
+ 336   4                                                      if(j<200)
+ 337   4                                                      {
+ 338   5                                                              RxUART_Tab[i]=SBUF;
+ 339   5                                                              RI=0;   
+ 340   5                                                              j=0;
+ 341   5                                                                                      
+ 342   5                                                      }
+ 343   4                                                      else
+ 344   4                                                      {
+ 345   5                                                          break;
+ 346   5                                                      }
+ 347   4                                                      
+ 348   4                                              }
+ 349   3      //                                      if(i==len)//接收完成
+ 350   3                                              {
+ 351   4                                                      REN=0;
+ 352   4                                                      Flg_StartUART=0;
+ 353   4                                                      R_RCnt=0;
+ 354   4                                              }                                       
+ 355   3                                      }
+ 356   2              }
+ 357   1              else if(!RI && TI)//发送
+ 358   1              {
+ 359   2                      TI=0;
+ 360   2                      len=TxUART_Tab[2];
+ 361   2                      for(i=0;i<len;i++)
+ 362   2                      {
+ 363   3      //                      Pin_Pluse=!Pin_Pluse;
+ 364   3                              SBUF=TxUART_Tab[i];
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 7   
+
+ 365   3                              while(!TI);
+ 366   3                              TI=0;   
+ 367   3                              //Delay10us();//Delay10us();//Delay10us();
+ 368   3      //                      Delay10us();//Delay10us();                      
+ 369   3                      }
+ 370   2                      REN=1;
+ 371   2              }               
+ 372   1      
+ 373   1      }
+ 374          
+ 375          //-------------------------------------------
+ 376          /*---------------外部中断0子程序------------
+ 377          //--------------------------------------------
+ 378          /输入：
+ 379          /输出：
+ 380          /备注：下降沿触发
+ 381          /
+ 382          */
+ 383          //-------------------------------------------
+ 384          void Inter_Ext0() interrupt 0       //INT0中断入口
+ 385          {
+ 386   1      //    FLAG = INT0;                //保存INT0口的状态, INT0=0(下降沿); INT0=1(上升沿)
+ 387   1      }
+ 388          //-------------------------------------------
+ 389          /*---------------显示数据更新子程序------------
+ 390          //--------------------------------------------
+ 391          /输入：需要显示的数据
+ 392          /输出：显示缓存R_DBUF1,R_DBUF2,R_DBUF3,R_DBUF4等，用于显示驱动层
+ 393          /备注：放在2毫米分时中调用
+ 394          /
+ 395          */
+ 396          //-------------------------------------------
+ 397          void    UpdateDisplay()
+ 398          {
+ 399   1      //      Flg_DispOK=0;
+ 400   1      //      R_DBUF1=0,R_DBUF2=0,R_DBUF3=0,R_DBUF4=0,R_DBUF5=0;
+ 401   1      //      Flg_DispOK=1;                                   
+ 402   1      }
+ 403          
+ 404          //-------------------------------------------
+ 405          /*---------------20毫秒计时子程序------------
+ 406          //--------------------------------------------
+ 407          /输入：需要计时的变量
+ 408          /输出：个变量预算后的结果
+ 409          /备注：放在2毫米分时中调用
+ 410          /       计时单位有：20ms，500ms，1S
+ 411          */
+ 412          //-------------------------------------------
+ 413          void    Timer50msCnt()
+ 414          {
+ 415   1              static char R_500msCnt,R_100msCnt;              
+ 416   1              R_500msCnt++;
+ 417   1              R_100msCnt++;
+ 418   1      
+ 419   1      //      R_PinCnt=5;     
+ 420   1      //----------计时50ms------------------------------------                
+ 421   1              {
+ 422   2              if(R_100msCnt==5)
+ 423   2                      {
+ 424   3                      R_100msCnt=0;
+ 425   3                      
+ 426   3                      }       
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 8   
+
+ 427   2                              
+ 428   2              }
+ 429   1      
+ 430   1      //----------计时20ms---END---------------------------------     
+ 431   1      
+ 432   1      //----------计时500ms------------------------------------       
+ 433   1              if(R_500msCnt == 25)
+ 434   1                      {
+ 435   2                      R_500msCnt=0;   
+ 436   2      //              CALL_isr_UART1();
+ 437   2      //----------此段为500ms------------------------------------
+ 438   2      
+ 439   2                      Flg_500MsFlash=!Flg_500MsFlash; 
+ 440   2      
+ 441   2      //----------计时1s------------------------------------
+ 442   2                                      
+ 443   2                      if(Flg_500MsFlash)
+ 444   2                              {
+ 445   3      
+ 446   3                              R_Second++;
+ 447   3      
+ 448   3                              if(R_Second==60)
+ 449   3                                      {
+ 450   4                                      R_Second=0;
+ 451   4      
+ 452   4                                      
+ 453   4                                      R_Minute++;
+ 454   4                                      if(R_Minute==60)
+ 455   4                                              {
+ 456   5                                              R_Minute=0;
+ 457   5                                              R_Hour++;
+ 458   5                                              if(R_Hour==24)
+ 459   5                                                      {
+ 460   6                                                      R_Hour=0;       
+ 461   6                                                      }
+ 462   5                      
+ 463   5                                              }       
+ 464   4                                      }
+ 465   3                      
+ 466   3      //------        ----此段为1s------------------------------------                        
+ 467   3                      
+ 468   3                              }               
+ 469   2      //----------计时1s---END---------------------------------                                       
+ 470   2                      }
+ 471   1      
+ 472   1      //----------计时500ms--END----------------------------------
+ 473   1      }
+ 474          //-------------------------------------------
+ 475          /*---------------串口发送数据处理子程序------------
+ 476          //--------------------------------------------
+ 477          /输入：
+ 478          /输出：
+ 479          /备注：主循环中调用
+ 480          /
+ 481          */
+ 482          //-------------------------------------------
+ 483          void    SendData_UART()
+ 484          {
+ 485   1              TxUART_Tab[0]=0xff;
+ 486   1              TxUART_Tab[1]=0xff;     
+ 487   1              TxUART_Tab[2]=24;
+ 488   1              TxUART_Tab[3]=0;
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 9   
+
+ 489   1              TxUART_Tab[4]=0x07;
+ 490   1      //----------------------
+ 491   1              TxUART_Tab[5]=2;        
+ 492   1      //----------------------                                
+ 493   1              TxUART_Tab[6]=0>>8;
+ 494   1              TxUART_Tab[7]=0;
+ 495   1      //----------------------                                
+ 496   1              TxUART_Tab[8]=0>>8;
+ 497   1              TxUART_Tab[9]=0;
+ 498   1      //----------------------                        
+ 499   1              TxUART_Tab[10]=0>>8;
+ 500   1              TxUART_Tab[11]=0;
+ 501   1      //----------------------                                
+ 502   1              TxUART_Tab[12]=0>>8;
+ 503   1              TxUART_Tab[13]=0;
+ 504   1              TxUART_Tab[14]=0;       
+ 505   1      //----------------------                                
+ 506   1              TxUART_Tab[15]=0>>8;
+ 507   1              TxUART_Tab[16]=0;
+ 508   1              TxUART_Tab[17]=0;       
+ 509   1      //----------------------                                
+ 510   1              TxUART_Tab[18]=0>>8;
+ 511   1              TxUART_Tab[19]=0;
+ 512   1      //----------------------                                
+ 513   1              TxUART_Tab[20]=0>>8;
+ 514   1              TxUART_Tab[21]=0;
+ 515   1              TxUART_Tab[22]=0;
+ 516   1                      
+ 517   1              TxUART_Tab[23]=TxUART_Tab[0]+TxUART_Tab[1]+TxUART_Tab[2]+TxUART_Tab[3]+TxUART_Tab[4];
+ 518   1              TxUART_Tab[23]+=TxUART_Tab[5]+TxUART_Tab[6]+TxUART_Tab[7]+TxUART_Tab[8]+TxUART_Tab[9];
+ 519   1              TxUART_Tab[23]+=TxUART_Tab[10]+TxUART_Tab[11]+TxUART_Tab[12]+TxUART_Tab[13]+TxUART_Tab[14];     
+ 520   1              TxUART_Tab[23]+=TxUART_Tab[15]+TxUART_Tab[16]+TxUART_Tab[17]+TxUART_Tab[18]+TxUART_Tab[19];
+ 521   1              TxUART_Tab[23]+=TxUART_Tab[20]+TxUART_Tab[21]+TxUART_Tab[22];                   
+ 522   1      }
+ 523          //-------------------------------------------
+ 524          /*---------------串口接收数据处理子程序------------
+ 525          //--------------------------------------------
+ 526          /输入：
+ 527          /输出：
+ 528          /备注：主循环中调用
+ 529          /
+ 530          */
+ 531          //-------------------------------------------
+ 532          void    RecData_UART()
+ 533          {
+ 534   1      //      if(Flg_StartUART)
+ 535   1      //              {
+ 536   1      //              return; 
+ 537   1      //              }
+ 538   1      
+ 539   1              if(RxUART_Tab[1]==0)
+ 540   1                      {
+ 541   2                      return; 
+ 542   2                      }
+ 543   1      //      if(RxUART_Tab[0]!=R_MachCnt)
+ 544   1      //              {
+ 545   1      //              return;         
+ 546   1      //              }
+ 547   1              switch(RxUART_Tab[1]&0x0f)
+ 548   1              {
+ 549   2                      case 0x01://
+ 550   2      
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 10  
+
+ 551   2                              break;
+ 552   2                      case 0x02://
+ 553   2      
+ 554   2                                                      
+ 555   2                              break;
+ 556   2                      case 0x03://
+ 557   2      
+ 558   2                              break;
+ 559   2                      case 0x04://
+ 560   2                      
+ 561   2                              break;
+ 562   2                      case 0x05://
+ 563   2              
+ 564   2                              break;
+ 565   2                      case 0x06://
+ 566   2              
+ 567   2                              break;
+ 568   2                      case 0x07:
+ 569   2                                      SendData_UART();
+ 570   2                              break;
+ 571   2                      default:                        
+ 572   2                              break;                                                          
+ 573   2              }
+ 574   1      
+ 575   1              CALL_isr_UART1();       //发送ACK
+ 576   1              ClearData_UART(1);      
+ 577   1      }
+ 578          //-------------------------------------------
+ 579          /*---------------UART数据处理子程序------------
+ 580          //--------------------------------------------
+ 581          /输入：
+ 582          /输出：
+ 583          /备注：主循环中调用
+ 584          /
+ 585          */
+ 586          //-------------------------------------------
+ 587          void    ClearData_UART(bit Flg_Sta)//Flg_Sta=1接收数据缓存清零，Flg_Sta=0发送数据缓存清零
+ 588          {
+ 589   1              u8 i;
+ 590   1              
+ 591   1              for(i=0;i<6;i++)
+ 592   1                      {
+ 593   2                      if(Flg_Sta)
+ 594   2                              RxUART_Tab[i]=0;
+ 595   2                              else
+ 596   2                                      {
+ 597   3                                      TxUART_Tab[i]=0;        
+ 598   3                                      }               
+ 599   2                      }       
+ 600   1      }
+ 601          //-------------------------------------------
+ 602          /*---------------按键处理子程序------------
+ 603          //--------------------------------------------
+ 604          /输入：按键产生标志Flg_HaveKey，按键键值R_CurKey，双击键产生标志FLG_keyDouble，
+ 605          /       按键未释放标志FLG_keymark,长按键产生标志Flg_LongKey
+ 606          /输出：各个按键功能
+ 607          /备注：主循环中调用
+ 608          /
+ 609          */
+ 610          //-------------------------------------------
+ 611          void    DealKey()//放在主循环中执行
+ 612          {
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 11  
+
+ 613   1              u8      R_BottomMode=0;
+ 614   1              if(Flg_HaveKey == 0)
+ 615   1                      {
+ 616   2                      return; 
+ 617   2                      }
+ 618   1                      Flg_HaveKey=0;  
+ 619   1                      R_DelaySave=3;  
+ 620   1                       R_BottomMode = R_CurKey;
+ 621   1                       switch(R_BottomMode)
+ 622   1                              {
+ 623   2                              case D_keyUp:   
+ 624   2                                                      EnableLongKeyS(2);
+ 625   2                                                      if(Flg_LongKey==0)
+ 626   2                                                              {
+ 627   3                                                              Flg_EnableRelease=1;
+ 628   3                                                              if(Flg_KeyRelease==0)   
+ 629   3                                                              break;  
+ 630   3                                                              }
+ 631   2                                                      if(Flg_LongKey)//长按键响应
+ 632   2                                                              {
+ 633   3              
+ 634   3                                                              }
+ 635   2                                                              else//释放键响应
+ 636   2                                                                      {
+ 637   3       
+ 638   3                                                                      }
+ 639   2                                                      Flg_LongKey=0;  
+ 640   2                                                      Flg_KeyRelease=0;                                                       
+ 641   2                                      break;
+ 642   2      
+ 643   2                              case D_keyDown:
+ 644   2      
+ 645   2                                                      EnableLongKeyS(2);
+ 646   2                                                      if(Flg_LongKey==0)
+ 647   2                                                              {
+ 648   3                                                              Flg_EnableRelease=1;
+ 649   3                                                              if(Flg_KeyRelease==0)   
+ 650   3                                                              break;  
+ 651   3                                                              }
+ 652   2                                                      if(Flg_LongKey)//长按键响应
+ 653   2                                                              {
+ 654   3                                                      
+ 655   3                                                              }
+ 656   2                                                              else//释放键响应
+ 657   2                                                                      {
+ 658   3                                                                      
+ 659   3                                                                      }
+ 660   2                                                      Flg_LongKey=0;  
+ 661   2                                                      Flg_KeyRelease=0;                                                       
+ 662   2      
+ 663   2                                      break;
+ 664   2                                                                                                                              
+ 665   2                              case D_keyTimerSet:
+ 666   2      //                                              if(FLG_keymark)
+ 667   2      //                                                      {
+ 668   2      //                                                      break;  
+ 669   2      //                                                      }
+ 670   2      //                                              EnableDoubleKey();
+ 671   2      //                                              if(!FLG_keyDouble)
+ 672   2      //                                                      {
+ 673   2      //                                                      break;  
+ 674   2      //                                                      }
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 12  
+
+ 675   2      //                                              FLG_keyDouble=0;
+ 676   2                                                      EnableLongKeyS(2);
+ 677   2                                                      if(Flg_LongKey==0)
+ 678   2                                                              {
+ 679   3      //                                                      Flg_EnableRelease=1;
+ 680   3      //                                                      if(Flg_KeyRelease==0)   
+ 681   3                                                              break;  
+ 682   3                                                              }
+ 683   2                                                      Flg_LongKey=0;  
+ 684   2      
+ 685   2                                      break;
+ 686   2      
+ 687   2      
+ 688   2                                      break;                          
+ 689   2                      
+ 690   2                               default:;                         
+ 691   2                                       break;
+ 692   2                              }
+ 693   1      
+ 694   1      }
+ 695          
+ 696          //-------------------------------------------
+ 697          /*---------------按键扫描子程序------------
+ 698          //--------------------------------------------
+ 699          /输入：
+ 700          /输出：各个按键键值R_KeyValue，用于按键中间层使用
+ 701          /备注：定时器中断子程序中调用
+ 702          /
+ 703          */
+ 704          //-------------------------------------------   
+ 705          void    KeyScan()//放在中断函数中执行125us执行一次
+ 706          {
+ 707   1              R_KeyValue=0;
+ 708   1              if(!Pin_KeyUp)
+ 709   1                      {
+ 710   2                      R_KeyValue=D_keyUp;
+ 711   2                      }
+ 712   1                      else
+ 713   1                              {
+ 714   2      
+ 715   2                              }
+ 716   1              if(!Pin_KeyDown)
+ 717   1                      {
+ 718   2                      R_KeyValue=D_keyDown;
+ 719   2                      }
+ 720   1                      else
+ 721   1                              {
+ 722   2      
+ 723   2                              }               
+ 724   1                              
+ 725   1              if(!Pin_TimerSet)
+ 726   1                      {
+ 727   2                      R_KeyValue=D_keyTimerSet;       
+ 728   2                      }
+ 729   1                                      
+ 730   1      
+ 731   1                                                                                                                                      
+ 732   1      }
+ 733          
+ 734          //-------------------------------------------
+ 735          /*---------------报警检测子程序------------
+ 736          //--------------------------------------------
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 13  
+
+ 737          /输入：
+ 738          /输出：
+ 739          /备注：
+ 740          /
+ 741          */
+ 742          //-------------------------------------------   
+ 743          void CheckError()
+ 744          {
+ 745   1                      
+ 746   1              if(Flg_E1)
+ 747   1                      {
+ 748   2                      R_Protect=D_Protect_E1;
+ 749   2                      }       
+ 750   1              if(Flg_E2)
+ 751   1                      {
+ 752   2                      R_Protect=D_Protect_E2;
+ 753   2                      }
+ 754   1              if(Flg_E3)
+ 755   1                      {
+ 756   2                      R_Protect=D_Protect_E3;
+ 757   2                      }                                       
+ 758   1              if(R_Protect)
+ 759   1                      {
+ 760   2                      R_WkMode=D_WkMode_Error;        
+ 761   2                      }       
+ 762   1                      else
+ 763   1                              {
+ 764   2                              }
+ 765   1      }
+ 766          //-------------------------------------------
+ 767          /*--------------保护恢复子程序------------
+ 768          //--------------------------------------------
+ 769          /输入：
+ 770          /输出：
+ 771          /备注：
+ 772          /
+ 773          */
+ 774          //-------------------------------------------   
+ 775          void Recovery()
+ 776          {
+ 777   1              switch(R_Protect)
+ 778   1              {
+ 779   2                      case 0:
+ 780   2                              
+ 781   2                              break;
+ 782   2                      case D_Protect_E1:
+ 783   2                              if(Flg_E1==0)
+ 784   2                                      {
+ 785   3                                      R_WkMode=0;
+ 786   3                                      R_Protect=0;    
+ 787   3                                      }
+ 788   2                              break;
+ 789   2                      case D_Protect_E2:
+ 790   2                              if(Flg_E2==0)
+ 791   2                                      {
+ 792   3                                      R_WkMode=0;
+ 793   3                                      R_Protect=0;    
+ 794   3                                      }                       
+ 795   2                              break;
+ 796   2                      case D_Protect_E3:
+ 797   2                              if(Flg_E3==0)
+ 798   2                                      {
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 14  
+
+ 799   3                                      R_WkMode=0;
+ 800   3                                      R_Protect=0;    
+ 801   3                                      }                       
+ 802   2                              break;
+ 803   2                      case D_Protect_E4:
+ 804   2                              
+ 805   2                              break;
+ 806   2                      case D_Protect_E5:
+ 807   2                              
+ 808   2                              break;
+ 809   2                      case D_Protect_E6:
+ 810   2                              
+ 811   2                              break;
+ 812   2                      case D_Protect_E7:
+ 813   2                              
+ 814   2                              break;
+ 815   2                      default:
+ 816   2                              break;                                                                                                          
+ 817   2              }
+ 818   1      }
+ 819          
+ 820          //-------------------------------------------
+ 821          /*---------------继电器驱动子程序------------
+ 822          //--------------------------------------------
+ 823          /输入：
+ 824          /输出：
+ 825          /备注：
+ 826          /
+ 827          */
+ 828          //-------------------------------------------   
+ 829          void RelayDrv()
+ 830          {
+ 831   1      
+ 832   1              if(Flg_RelayWk1)
+ 833   1                      {
+ 834   2                      Pin_Relay1=1;
+ 835   2                      }
+ 836   1                      else
+ 837   1                              {
+ 838   2                              Pin_Relay1=0;   
+ 839   2                              }
+ 840   1              if(Flg_RelayWk2)
+ 841   1                      {
+ 842   2                      Pin_Relay2=1;
+ 843   2                      }
+ 844   1                      else
+ 845   1                              {
+ 846   2                              Pin_Relay2=0;   
+ 847   2                              }
+ 848   1              if(Flg_RelayWk3)
+ 849   1                      {
+ 850   2                      Pin_Relay3=1;
+ 851   2                      }
+ 852   1                      else
+ 853   1                              {
+ 854   2                              Pin_Relay3=0;   
+ 855   2                              }                                               
+ 856   1      
+ 857   1      }               
+ 858          //-------------------------------------------
+ 859          /*---------------初始化子程序------------
+ 860          //--------------------------------------------
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 15  
+
+ 861          /输入：
+ 862          /输出：
+ 863          /备注：定时器初始化，看门狗初始化
+ 864          /
+ 865          */
+ 866          //-------------------------------------------   
+ 867          void Sys_Initial()
+ 868          {
+ 869   1              P0M0 = 0x00;
+ 870   1              P0M1 = 0x00;
+ 871   1              P1M0 = 0x00;
+ 872   1              P1M1 = 0x00;
+ 873   1              P2M0 = 0x00;
+ 874   1              P2M1 = 0x00;
+ 875   1              P3M0 = 0x00;
+ 876   1              P3M1 = 0x00;
+ 877   1              P4M0 = 0x00;
+ 878   1              P4M1 = 0x00;
+ 879   1              P5M0 = 0x00;
+ 880   1              P5M1 = 0x00;
+ 881   1              P6M0 = 0x00;
+ 882   1              P6M1 = 0x00;
+ 883   1      //      //输出
+ 884   1      //      P0M0|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);        
+ 885   1      //      P0M1&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 886   1      //      //输入
+ 887   1      //      P0M0&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);       
+ 888   1      //      P0M1|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 889   1      //      
+ 890   1      //      //输出
+ 891   1      //      P1M0|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);        
+ 892   1      //      P1M1&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 893   1      //      //输入
+ 894   1      //      P1M0&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);       
+ 895   1      //      P1M1|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 896   1      //      
+ 897   1      //      //输出
+ 898   1      //      P2M0|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);        
+ 899   1      //      P2M1&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 900   1      //      //输入
+ 901   1      //      P2M0&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);       
+ 902   1      //      P2M1|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 903   1      //      
+ 904   1      //      //输出
+ 905   1      //      P3M0|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);        
+ 906   1      //      P3M1&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 907   1      //      //输入
+ 908   1      //      P3M0&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);       
+ 909   1      //      P3M1|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 910   1      //      //输出
+ 911   1      //      P4M0|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);        
+ 912   1      //      P4M1&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 913   1      //      //输入
+ 914   1      //      P4M0&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);       
+ 915   1      //      P4M1|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 916   1      //      
+ 917   1      //      //输出
+ 918   1      //      P5M0|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);        
+ 919   1      //      P5M1&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);
+ 920   1      //      //输入
+ 921   1      //      P5M0&=~(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);       
+ 922   1      //      P5M1|=(0x01|0x02|0x04|0x08|0x10|0x20|0x40|0x80);        
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 16  
+
+ 923   1      
+ 924   1      //------------------------------------------定时器0配置         
+ 925   1               AUXR |= 0x80;      //定时器0为1T模式
+ 926   1      //       AUXR &= 0x7f;      //定时器0为12T模式
+ 927   1              TMOD &= 0xf0;           //设置定时器模式 工作方式0,16位自动重载 
+ 928   1              TL0 = T0Timer;          //设置定时初值
+ 929   1              TH0 = T0Timer>>8;       //设置定时初值125us 
+ 930   1          TR0 = 1;            //定时器0开始计时
+ 931   1          ET0 = 1;            //使能定时器0中断
+ 932   1      //------------------------------------------串口波特率配置：0检验位，1停止位
+ 933   1              SCON = 0x50;            //8位数据,可变波特率
+ 934   1              AUXR |= 0x01;           //串口1选择定时器2为波特率发生器
+ 935   1              AUXR |= 0x04;           //定时器2时钟为Fosc,即1T
+ 936   1              T2L = (65536 - (FOSC/4/BAUD));   //设置波特率重装值
+ 937   1          T2H = (65536 - (FOSC/4/BAUD))>>8;
+ 938   1              AUXR |= 0x10;           //启动定时器2
+ 939   1              ES = 1;             //串口中断打开
+ 940   1      //------------------------------------------    
+ 941   1      //      AUXR |= 0x40;           //定时器1时钟为Fosc,即1T
+ 942   1      //      AUXR &= 0xFE;           //串口1选择定时器1为波特率发生器
+ 943   1      //      SCON = 0x5a;                    //8 bit data ,no parity bit
+ 944   1      //      TMOD = 0x20;                    //T1 as 8-bit auto reload
+ 945   1      ////            TH1 = TL1 = -(FOSC/32/BAUD); //Set Uart baudrate
+ 946   1      //      T1L = (65536 - (FOSC/4/BAUD));   //设置波特率重装值
+ 947   1      //    T1H = (65536 - (FOSC/4/BAUD))>>8;
+ 948   1      //  TR1 = 1;                        //T1 start running
+ 949   1      ////---------------------------------------------外部中断0配置  
+ 950   1          INT0 = 1;
+ 951   1          IT0 = 1;                    //设置INT0的中断类型 (1:仅下降沿 0:上升沿和下降沿)
+ 952   1          EX0 = 1;                    //使能INT0中断
+ 953   1          
+ 954   1      //------------------------------------------ 总中断配置
+ 955   1          EA = 1;
+ 956   1              
+ 957   1      //-------------------------------------------看门狗配置
+ 958   1          WDT_CONTR = 0x02;       //看门狗定时器溢出时间计算公式: (12 * 32768 * PS) / FOSC (秒)
+ 959   1                                  //设置看门狗定时器分频数为32,溢出时间如下:
+ 960   1                                  //11.0592M : 1.14s
+ 961   1                                  //18.432M  : 0.68s
+ 962   1                                  //20M      : 0.63s
+ 963   1          WDT_CONTR |= 0x20;      //启动看门狗  
+ 964   1          
+ 965   1      }
+ 966          
+ 967          void SaveDateToErrom()
+ 968          {
+ 969   1      
+ 970   1              if(Flg_ToErrom)//保存区域分界线的值
+ 971   1                      {
+ 972   2                      IapEraseSector(0x000);
+ 973   2                      IapProgramByte(0x001,0>>8);     //
+ 974   2                      IapProgramByte(0x002,0);
+ 975   2                      IapProgramByte(0x003,0>>8);     //
+ 976   2                      IapProgramByte(0x004,0);        
+ 977   2                      IapProgramByte(0x005,0>>8);     //
+ 978   2                      IapProgramByte(0x006,0);
+ 979   2                      IapProgramByte(0x007,0>>8);     //
+ 980   2                      IapProgramByte(0x008,0);        
+ 981   2                      IapProgramByte(0x009,0>>8);     //
+ 982   2                      IapProgramByte(0x00a,0);
+ 983   2                      IapProgramByte(0x00b,0>>8);     //
+ 984   2                      IapProgramByte(0x00c,0);        
+C51 COMPILER V9.00   MAIN                                                                  10/29/2017 17:27:31 PAGE 17  
+
+ 985   2                      IapProgramByte(0x00d,00>>8);    //
+ 986   2                      IapProgramByte(0x00e,00);
+ 987   2                      IapProgramByte(0x00f,0);        //
+ 988   2                      IapProgramByte(0x010,0);                                        
+ 989   2                      IapProgramByte(0x011,0);
+ 990   2                      IapProgramByte(0x012,0);
+ 991   2                      IapProgramByte(0x013,0);
+ 992   2                      IapProgramByte(0x000,0x55);
+ 993   2                      Flg_ToErrom=0;                          
+ 994   2                      }
+ 995   1      
+ 996   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1135    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     18    ----
+   IDATA SIZE       =     60    ----
+   BIT SIZE         =      5       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

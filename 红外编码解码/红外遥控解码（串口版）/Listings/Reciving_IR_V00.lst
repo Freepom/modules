@@ -1,0 +1,103 @@
+C51 COMPILER V9.00   RECIVING_IR_V00                                                       10/20/2017 11:12:13 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE RECIVING_IR_V00
+OBJECT MODULE PLACED IN .\Objects\Reciving_IR_V00.obj
+COMPILER INVOKED BY: G:\Keil_v5\C51\BIN\C51.EXE SRC\Reciving_IR_V00.C OPTIMIZE(8,SPEED) BROWSE INCDIR(.\SRC) DEBUG OBJEC
+                    -TEXTEND PRINT(.\Listings\Reciving_IR_V00.lst) OBJECT(.\Objects\Reciving_IR_V00.obj)
+
+line level    source
+
+   1          #include "Reciving_IR.h"
+   2          
+   3          bit Flg_IRSta;//电平状态标志位
+   4          bit Flg_RxStart;//开始接收数据
+   5          bit Flg_RxIROK;//接收数据完成
+   6          bit Flg_IRReplayKey;//连续键
+   7          unsigned char R_HightCnt,R_LowCnt,R_RxDataCnt;//高电平计数，低电平计数，字节计数
+   8          unsigned char R_RxDataTemp;
+   9          unsigned char R_RxByteCnt=D_RxByteCnt;
+  10          unsigned char RxData_Tab[D_RxByteCnt];//接收数据缓存
+  11          
+  12          void REciving_IR()
+  13          {
+  14   1              if(Pin_IR)
+  15   1                      {
+  16   2                      if(R_HightCnt<0xff)
+  17   2                      R_HightCnt++;
+  18   2      
+  19   2      //              if((R_LowCnt>D_LeadTm9Ms)&& (Flg_IRSta==0))
+  20   2      //                      {
+  21   2      //                      R_LowCnt=0;//引导码9ms  
+  22   2      //                      }
+  23   2                      R_LowCnt=0;     
+  24   2                      Flg_IRSta=1;    
+  25   2                      }       
+  26   1                      else
+  27   1                              {
+  28   2                              if(R_LowCnt<0xff)       
+  29   2                              R_LowCnt++;
+  30   2                              if(Flg_RxStart&&Flg_IRSta)//从高变低时，判断逻辑“1”或“0”
+  31   2                                      {
+  32   3                                      R_RxDataCnt++;  
+  33   3                                      R_RxDataTemp <<= 1;
+  34   3                                      if(R_HightCnt>D_HightTm169Ms&&R_HightCnt<D_LeadTm45Ms)
+  35   3                                              {                                       
+  36   4                                              R_RxDataTemp |= 0x01;   //逻辑“1”
+  37   4                                              }
+  38   3                                              else
+  39   3                                                      { 
+  40   4                                                      R_RxDataTemp &= ~0x01;  //逻辑“0”     
+  41   4                                                      }
+  42   3                                                      
+  43   3      
+  44   3                                      if(R_RxDataCnt%8==0)
+  45   3                                              {
+  46   4                                              RxData_Tab[R_RxDataCnt/8-1]=R_RxDataTemp;       
+  47   4                                              }
+  48   3                                      if(R_RxDataCnt == R_RxByteCnt*8)
+  49   3                                              {
+  50   4      //                                      RxData_Tab[3]=R_RxDataTemp;
+  51   4                                              Flg_RxStart=0;//接收完成
+  52   4                                              Flg_RxIROK=1;
+  53   4                                              Flg_IRReplayKey=0;
+  54   4                                              }                                                                                                                                                                                       
+C51 COMPILER V9.00   RECIVING_IR_V00                                                       10/20/2017 11:12:13 PAGE 2   
+
+  55   3                                      }
+  56   2                              if(((R_HightCnt>D_LeadTm45Ms)&&R_HightCnt<D_LeadTm9Ms)&&(Flg_IRSta)&&(!Flg_RxStart))//引导码4.5ms
+  57   2                                      {                                       
+  58   3                                      R_RxDataCnt=0;
+  59   3                                      Flg_RxStart=1;  //开始接收数据
+  60   3                                      Flg_IRReplayKey=0;
+  61   3                                      }
+  62   2                              if((R_HightCnt>D_LeadTm2Ms)&&R_HightCnt<D_LeadTm45Ms)//引导码2ms 长按键判断
+  63   2                                      {
+  64   3      //                              Flg_IRReplayKey=1;
+  65   3      //                              Flg_RxIROK=1;   
+  66   3                                      }
+  67   2                                      else
+  68   2                                              Flg_IRReplayKey=0;                                      
+  69   2      //                              else if(((R_HightCnt<=25)||R_HightCnt>=60)&&(Flg_IRSta)&&(!Flg_RxStart))
+  70   2      //                                      {
+  71   2      //                                      Flg_RxStart=0;  
+  72   2      //                                      }
+  73   2                                              
+  74   2                              R_HightCnt=0;
+  75   2                              Flg_IRSta=0;    
+  76   2                              }                       
+  77   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    146    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      9    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      4    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

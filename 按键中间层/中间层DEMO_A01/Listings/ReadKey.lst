@@ -1,0 +1,203 @@
+C51 COMPILER V9.00   READKEY                                                               04/21/2018 15:24:11 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE READKEY
+OBJECT MODULE PLACED IN .\Objects\ReadKey.obj
+COMPILER INVOKED BY: G:\Keil_v5\C51\BIN\C51.EXE ReadKey.c OPTIMIZE(8,SPEED) DEBUG OBJECTEXTEND PRINT(.\Listings\ReadKey.
+                    -lst) OBJECT(.\Objects\ReadKey.obj)
+
+line level    source
+
+   1          #include"ReadKey.h"
+   2          unsigned char   R_KeyDelay      =0;
+   3          unsigned char   KeyMarkDly      =0;
+   4          unsigned char   R_KeyDoubleTm   =0;
+   5          unsigned int    R_KeyPressTm    =0;
+   6          unsigned char   R_KeyValue      =0;
+   7          unsigned char   R_OldKeyValue   =0;
+   8          unsigned char   R_CurKey        =0;
+   9          unsigned char   R_KeyBuffer     =0;
+  10          
+  11          bit     FLG_keymark     =0;
+  12          bit     FLG_keyDouble   =0;
+  13          bit     FLG_EnableDoubleKey     =0;
+  14          bit     Flg_LongKey     =0;
+  15          bit     Flg_EnableLongKey       =0;
+  16          
+  17          bit Flg_EnableRelease;
+  18          bit Flg_KeyRelease;
+  19          bit Flg_KeyPress;
+  20          bit Flg_KeyUp;
+  21          
+  22          bit     Flg_HaveKey;
+  23          
+  24          void    ReadR_KeyValue()//放在2ms分时中执行，20ms执行一次
+  25          {
+  26   1      //      if(!Flg_SisResetOK)     //系统未初始化完成，退出
+  27   1      //              return;
+  28   1              if(R_KeyDelay)
+  29   1                      {
+  30   2                      R_KeyDelay--;   
+  31   2                      }
+  32   1              if(R_KeyDoubleTm)
+  33   1                      {
+  34   2                      R_KeyDoubleTm--;        
+  35   2                      }               
+  36   1              if(R_KeyPressTm)
+  37   1                      {
+  38   2                      R_KeyPressTm--; 
+  39   2                      }               
+  40   1                      else
+  41   1                              {
+  42   2                              Flg_EnableLongKey=0;
+  43   2                              FLG_EnableDoubleKey=0;
+  44   2                              FLG_keymark=0;  
+  45   2                              FLG_EnableDoubleKey=0;                          
+  46   2                              }               
+  47   1              if(!R_KeyDelay)
+  48   1                      { 
+  49   2                       R_OldKeyValue=0;
+  50   2                      Flg_EnableLongKey=0;
+  51   2                      FLG_keymark=0;                           
+  52   2                      }
+  53   1      //      if(R_KeyValue)
+  54   1                      {
+C51 COMPILER V9.00   READKEY                                                               04/21/2018 15:24:11 PAGE 2   
+
+  55   2                      R_OldKeyValue=R_KeyValue;       
+  56   2                      }
+  57   1              if(R_OldKeyValue == R_CurKey)
+  58   1                      {
+  59   2                      if(R_OldKeyValue)//当前键值不为0
+  60   2                              {
+  61   3                              Flg_KeyPress=1;//按键按下       
+  62   3                              if(R_KeyPressTm == 0)//长按时间到
+  63   3                                      {
+  64   4                                      if(Flg_EnableLongKey)//长按键使能切有效按键
+  65   4                                              {                                       
+  66   5                                              Flg_LongKey=1;//响应长按键
+  67   5                                              Flg_EnableLongKey=0;
+  68   5                                              Flg_EnableRelease=0;//响应长按键后，取消按键释放功能
+  69   5                                              R_CurKey=R_OldKeyValue;
+  70   5                                              Flg_HaveKey=1;          
+  71   5                                              }
+  72   4                                              else
+  73   4                                                      {
+  74   5                                                      FLG_keymark=1;
+  75   5                                                      R_CurKey=R_OldKeyValue;
+  76   5                                                      Flg_HaveKey=1;
+  77   5                                                      R_KeyPressTm=1; 
+  78   5                                                      }                                       
+  79   4                                      }
+  80   3      
+  81   3                              R_KeyDelay=50;                          
+  82   3                              }
+  83   2                              else//按键键值为0
+  84   2                                      {
+  85   3                                      
+  86   3                                      Flg_EnableLongKey=0;
+  87   3                      
+  88   3                                      }
+  89   2                      }
+  90   1                      else
+  91   1                              {
+  92   2                              Flg_EnableLongKey=0;
+  93   2      
+  94   2                              if(R_OldKeyValue)//第一次产生有效按键
+  95   2                                      {
+  96   3                                      Flg_KeyPress=1;//按键按下
+  97   3                                      Flg_KeyRelease=0;
+  98   3                                      Flg_EnableRelease=0;                                    
+  99   3                                      if(FLG_EnableDoubleKey)//是否开启了双击键
+ 100   3                                              {
+ 101   4                                              if(R_KeyDoubleTm)//如果再双击键的限定时间内
+ 102   4                                                      {
+ 103   5                                                      FLG_keyDouble=1;                //响应双击键
+ 104   5                                                      R_CurKey=R_OldKeyValue; //更新键值      
+ 105   5                                                      Flg_HaveKey=1;          //响应按键键    
+ 106   5                                                      R_KeyDelay=50;
+ 107   5                                                      R_KeyPressTm=10;                                                
+ 108   5                                                      }
+ 109   4                                                      else
+ 110   4                                                              {
+ 111   5                                                              FLG_keyDouble=0;        
+ 112   5                                                              }       
+ 113   4                                              }
+ 114   3                                              else
+ 115   3                                                      {
+ 116   4                                                      R_CurKey=R_OldKeyValue; //更新键值      
+C51 COMPILER V9.00   READKEY                                                               04/21/2018 15:24:11 PAGE 3   
+
+ 117   4                                                      Flg_HaveKey=1;
+ 118   4                                                      FLG_keymark=0;
+ 119   4                                                      R_KeyDelay=50;
+ 120   4                                                      R_KeyPressTm=10;                                                        
+ 121   4                                                      }                                                       
+ 122   3                                      }
+ 123   2                                      else//按键弹起
+ 124   2                                              {
+ 125   3      //                                      R_CurKey=R_OldKeyValue; //更新键值      
+ 126   3                                              if(Flg_EnableRelease)//是否使能按键释放功能
+ 127   3                                                      {
+ 128   4                                                      if(Flg_KeyPress)//按键是否已经按下
+ 129   4                                                              {
+ 130   5                                                              Flg_KeyRelease=1;//响应按键释放功能
+ 131   5                                                              Flg_EnableRelease=0;    
+ 132   5      //                                                      R_CurKey=R_OldKeyValue;
+ 133   5                                                              Flg_HaveKey=1;                                          
+ 134   5                                                              }       
+ 135   4                                                      }
+ 136   3                                                      else
+ 137   3                                                              {
+ 138   4                                                              R_CurKey=R_OldKeyValue; 
+ 139   4                                                              }
+ 140   3                                              Flg_KeyPress=0;//按键释放                                                                               
+ 141   3                                              }
+ 142   2                                      
+ 143   2      
+ 144   2                              }
+ 145   1      
+ 146   1      }
+ 147          #if DefineDoubleKey
+              void EnableDoubleKey()
+              {
+                      if(FLG_EnableDoubleKey==0)
+                              {
+                              FLG_EnableDoubleKey=1;
+              //              FLG_keyDouble=1;
+                              R_KeyDoubleTm=100;
+                              }       
+              }
+              #endif
+ 158          //-----------------------------------------
+ 159          //
+ 160          //按键长按键处理子程序
+ 161          //
+ 162          //-----------------------------------------
+ 163          #if DefineLongKeyS
+              void EnableLongKeyS(unsigned char XS)
+              {
+                      if(Flg_EnableLongKey==0)
+                              {
+                              Flg_EnableLongKey=1;
+              //              Flg_LongKey=1;
+                              R_KeyPressTm=XS*1000/20;
+                              }       
+              }
+              #endif
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    171    ----
+   CONSTANT SIZE    =   ----    ----
+C51 COMPILER V9.00   READKEY                                                               04/21/2018 15:24:11 PAGE 4   
+
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      9    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =     10    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,1907 @@
+/*--------------------------------------------------------------
+/项目名：
+/开发工程师：
+/日期：
+/版本：
+/主控MCU：
+/备注：
+/
+/
+*///------------------------------------------------------------------
+
+#include "main.h"
+#include "display.h"
+#include "ReadKey.h"
+#include "oled.h"
+#include "Reciving_IR.h"
+#include "ds1302.h"
+#include "dht11.h"
+#include "ADC.h"
+#include "pwm_pwm.h"
+#include "RGB.h"
+#include "ClockTimer.h"
+#include "UpdateDisp.h"
+#include "music.h"
+
+//sbit Pin_TST=P3^5;
+#define	nokey		0
+#define	D_keyDown	0x41
+#define	D_keyUp		0x42
+#define	D_keyLeft	0x43
+#define	D_keyRight	0x44
+#define	D_keySet	0x45
+#define	D_keyRelease	6
+
+
+//u8 idata TimerKD_Tab[60];
+//位置修正函数
+#define XZ D_AverageVl*5/8  //传感器位置与"十二点"位置间隔(指针走的步数)
+#define OffsetSM(x) (x*5+XZ)>60*5? (x*5+XZ-60*5):(x*5+XZ)
+#define OffsetH(x) (x*25+XZ)>12*25? (x*25+XZ-12*25):(x*25+XZ)
+	
+#define FOSC    22118400L//11092500L
+#define BAUD    9600
+#define D_T1Timer (65536-FOSC/8000)
+#define D_T0Timer 0xFc00	//17.7MS
+#define PinPP(Pn,n) {switch(Pn){\							
+			case 0:P0M1 &= ~(1 << n);P0M0 |=  (1 << n);break;\
+			case 1:P1M1 &= ~(1 << n);P1M0 |=  (1 << n);break;\
+			case 2:P2M1 &= ~(1 << n);P2M0 |=  (1 << n);break;\
+			case 3:P3M1 &= ~(1 << n);P3M0 |=  (1 << n);break;\
+			case 4:P4M1 &= ~(1 << n);P4M0 |=  (1 << n);break;\
+			case 5:P5M1 &= ~(1 << n);P5M0 |=  (1 << n);break;\										
+    			default:break;\    									     										
+			}\
+		    }
+		    
+#define ClrWDT	{WDT_CONTR |= 0x10;}//清看门狗，喂狗程序			
+#define IAP_ENABLE 0x60 //IAP允许
+sfr IAP_CNTR = 0xC7; //IAP控制寄存器
+//---------------------------------------------
+
+
+//-----------------主循环架构的定义-----------------------------------
+
+u16 R_MainTemper;
+//u8 	R_TimerMSCnt;
+u8	R_2ms=0;//2ms计时
+bit	Flg_2ms=0;
+bit 	Flg_500MsFlash;
+char	R_JmpmsCnt=0;
+char R_ExtDelay;
+u16 R_T1ExtCnt;
+u16 R_T1TimerTmp;
+bit Flg_Ext;
+#define	D_AverageVl 60UL
+
+u8	R_MainMode=0;
+//----------------------------------------------------------
+sbit Pin_LED=P2^1;
+sbit Pin_Speed=P3^6;
+sbit Pin_MotorSW=P0^3;
+//----------------------------------------------------------
+#define	D_BeepTm 10	//20MS
+#define	Beep() {R_BeepTm=D_BeepTm;R_BeepFrq=10;}
+u8 R_BeepCnt;
+u8 R_BeepTm=D_BeepTm;
+
+
+u8 R_BeepFrq,R_BeepFrqBak;
+
+sbit Pin_Beep	= P0^4;
+//----------------------------------------------------------
+/**********************************************************************************/
+//----按键扫描、按键检测、按键处理的定义-----------------------------------
+
+sbit Pin_KeyDown	= P2^0;
+sbit Pin_KeyUp	 	= P4^4;
+sbit Pin_KeyLeft	= P4^3;
+sbit Pin_KeyRight	= P4^2;
+sbit Pin_KeySet		= P4^1;
+
+//----------------------------------------------------------
+u8 R_AudioAD,R_AudioADDec;
+u16 idata R_AudioADTemp;
+u16 idata R_SpeedCnt,R_SpeedCntTmp;
+bit Flg_HaveAudio;
+bit Flg_MusicDisp;
+u16 R_OffSet_Hour,R_OffSet_Min,R_OffSet_Sec;
+u16 idata DispKeDu_Tab[12];
+u8 R_PanLight=5;
+u8 xdata Pang_Tab[D_AverageVl];
+bit Flg_AlarmBorm1,Flg_AlarmBorm2,Flg_AlarmBorm3,Flg_AlarmBorm4;
+bit Flg_AlarmChance1,Flg_AlarmChance2,Flg_AlarmChance3,Flg_AlarmChance4;
+//----------------------------------------------------------
+u8 R_Second,R_Minute,R_Hour;
+sbit Pin_TST=P3^5;
+//-----------------------------------------
+//
+//函数声明
+//
+//-----------------------------------------
+void TmToSetAlarm();
+void CancelAlarm();
+void CheckAlarm();
+void 	UpdateDisplayPan();
+void DispOffSet();
+u8 DealRFKey(u8 R_Data);
+void BeepDrv();
+void 	NewDisplay2();
+void	DealKey();
+void	KeyScan();
+void	UpdateDisplay();
+void 	DispDrv();
+void	Timer50msCnt();
+void 	Init_System();
+//-------------------------------------------
+/*---------------主循环---------------------
+//--------------------------------------------
+/输入：
+/输出：
+/备注：
+/	
+*/
+//-------------------------------------------
+main()
+{
+
+	Init_System();	//定时器初始化
+	Init_ADC();
+	Init_PWM();
+	Init_DS1302();		
+	Init_OLED();
+
+	Pin_MotorSW=0;
+	Flg_ToCheckDHT=1;
+
+	ClrWDT;				
+	while(1)
+	{
+	ClrWDT;	
+//	UpdateDisplayPan();
+	DealKey();	//按键处理
+	DispOffSet();	
+	if(Flg_2ms)	//2毫秒分时处理
+		{
+		Flg_2ms=0;
+		if(R_ExtDelay)
+		{
+		R_ExtDelay--;
+		}
+		Ds1302_Read_Time();
+		DispDrv();
+		if(++R_JmpmsCnt == 10)R_JmpmsCnt=0;
+		switch(R_JmpmsCnt)	//2毫秒分时处理
+			{
+			case	0:
+            				
+				break;
+			case	1:
+					UpdateDisplay();
+				break;
+			case	2:
+//					DispDrv();
+					
+				break;												
+			case	3:
+
+				break;
+			case	4:
+//					DispDrv();
+				break;
+			case	5:
+					ReadR_KeyValue();	//按键转换
+				break;
+			case	6:
+					UpdateDisplay();
+				break;
+			case	7:					
+					if(Flg_ToCheckDHT)
+						{
+						RH();	
+						}
+				break;												
+			case	8:
+//					DispDrv();
+				break;
+			case	9:
+					Timer50msCnt();	//20毫秒计时
+				break;
+			default:
+				break;																
+			}
+		}	
+	}
+}
+//-------------------------------------------
+/*---------------外部中断INT2中断子程序------------
+/输入：光耦门电路速度检测
+/输出：转盘速度
+/备注：下降沿触发
+/
+*/
+//-------------------------------------------
+void exint0() interrupt 0     //INT2中断入口
+{
+	static u16 Temp;
+	TL0=0xff;//-1;	//防止画面抖动
+	TH0=0xff; 
+    	Pin_LED = !Pin_LED;                     //将测试口取反
+
+    	R_SpeedCnt=R_SpeedCntTmp;	//更新速度，即转盘周期，
+    	R_SpeedCntTmp=0;
+
+    	Temp=Temp+(R_T1ExtCnt-D_AverageVl);	//自动调整定时器初始值，使得每周的
+    	R_T1TimerTmp=D_T0Timer+Temp;		//定时器中断次数与设定的一样	  
+//    	if((R_SpeedCnt>5)&&(R_SpeedCnt<0xfa0))
+    		{
+    		if(R_T1ExtCnt==D_AverageVl)	//速度稳定后，打开显示
+    			Flg_RGB_Start=1;	
+    		}
+//    		else
+//    			{
+//    			Flg_RGB_Start=0;	
+//    			}
+    	R_T1ExtCnt=0;
+  
+//	Flg_Ext=1; 
+//	TR0=1;	
+//	ET0=1;	
+//  INT_CLKO &= 0xEF;               //若需要手动清除中断标志,可先关闭中断,此时系统会自动清除内部的中断标志
+//  INT_CLKO |= 0x10;               //然后再开中断即可
+}
+//-------------------------------------------
+/*---------------定时器中断子程序------------
+/输入：定时器T1中断
+/输出：2毫秒标志Flg_2ms=1，按键扫描
+/备注：定时器1方式2,16位自动重载，定时125us
+/
+*/
+//-------------------------------------------
+void et1()interrupt 3
+{
+	
+	static u8 R_MSCnt=0;
+//	TL0 = 0x9A;		//设置定时初值
+//	TH0 = 0xFA;		//设置定时初值125us  		
+	R_MSCnt++;				
+	if(R_MSCnt == 16)
+		{
+		R_MSCnt=0;
+		Flg_2ms=1;	
+		}
+//	Pin_TST=!Pin_TST;		
+	BeepDrv();
+	KeyScan();	//按键扫描
+	REciving_IR();
+	ChangeADCchannel();
+						
+}
+
+//-------------------------------------------
+/*---------------定时器中断子程序------------
+/输入：定时器T0中断
+/输出：RGB输出控制，时钟显示
+/备注：定时器0方式2,16位自动重载，
+/
+*/
+//-------------------------------------------
+void et0() interrupt 1 //
+{
+
+   	TL0 = (-R_T1TimerTmp);		//设置定时初值
+	TH0 = (-R_T1TimerTmp)>>8;	//设置定时初值		
+
+		
+	if(R_SpeedCntTmp<0xf00)
+		{
+		R_SpeedCntTmp++;	
+		}
+
+	if((R_T1ExtCnt<100)&&(R_T1ExtCnt>50))
+		{
+		R_RGBCnt=4;
+		}
+		else
+			{
+			R_RGBCnt=2;	
+			}		
+
+//	R_RGBCnt=0;	
+//
+//	UpdateDisplayPan();
+//	if(Flg_Ext)
+//		{
+//		R_T1ExtCnt=0;
+//		continue;	
+//		}	
+//	PIN_SW2 |= 0x80;
+//	if(Flg_RGB_Start)	
+//		R_OpenRGB=LED_COL[R_RGBCnt];//Pang_Tab[R_T1ExtCnt]
+//		else
+//			R_OpenRGB=0;
+//	PIN_SW2 &= ~0x80;	
+	if((LED_COL[R_RGBCnt]&D_EnPWM_R)==0)
+		{
+		Pin_PWM_R=0;	
+		}
+		else
+			{
+			Pin_PWM_R=1;	
+			}
+	if((LED_COL[R_RGBCnt]&D_EnPWM_G)==0)
+		{
+		Pin_PWM_G=0;	
+		}
+		else
+			{
+			Pin_PWM_G=1;	
+			}
+	if((LED_COL[R_RGBCnt]&D_EnPWM_B)==0)
+		{
+		Pin_PWM_B=0;	
+		}
+		else
+			{
+			Pin_PWM_B=1;	
+			}
+		
+
+//	if(R_T1ExtCnt<=D_AverageVl)
+		{
+		R_T1ExtCnt++;	
+		}
+//		else
+//			{
+////			R_T1ExtCnt=0;
+//			TR0=0;
+//			ET0=0;	
+//			}
+				
+	Pin_TST=1;				
+}
+//串行中断函数
+void serial() interrupt 4
+{
+
+//	RxDataTemp_Tab[R_RxCnt]=SBUF;//	
+	RI=0;
+ 	if(0x7F == SBUF) //? ? ? ? ? ? ?//判断是否为下载流信息
+ 	{
+ 	IAP_CNTR =IAP_ENABLE; //?//允许IAP, 也就是直接进入下载程序
+	// soft_reset();
+ 	}
+
+}
+//-------------------------------------------
+/*---------------显示数据更新子程序------------
+//--------------------------------------------
+/输入：需要显示的数据
+/输出：显示缓存R_DBUF1,R_DBUF2,R_DBUF3,R_DBUF4等，用于显示驱动层
+/备注：放在2毫米分时中调用
+/
+*/
+//-------------------------------------------
+void DispOffSet()
+{
+	u8 i;
+	if(time_buf1[4]>12)
+		{
+		R_MainTemper=time_buf1[4]-12;	
+		}
+		else
+			{
+			R_MainTemper=time_buf1[4];	
+			}
+	R_OffSet_Hour=OffsetH(R_MainTemper);
+	R_OffSet_Min=OffsetSM(time_buf1[5]);
+	R_OffSet_Sec=OffsetSM(time_buf1[6]);
+	
+	for(i=0;i<12;i++)
+	{
+	DispKeDu_Tab[i]=OffsetH(i);		
+	}
+	
+			
+}
+//-------------------------------------------
+/*---------------显示数据更新子程序------------
+//--------------------------------------------
+/输入：需要显示的数据
+/输出：显示缓存R_DBUF1,R_DBUF2,R_DBUF3,R_DBUF4等，用于显示驱动层
+/备注：放在2毫米分时中调用
+/
+*/
+//-------------------------------------------
+void 	UpdateDisplayPan()
+{
+
+	switch(R_PanMode)
+	{
+		case D_PanMode_CM:
+			
+//			break;		
+
+		case D_PanMode_Music:
+				R_MainTemper=R_AudioADTemp;
+				if((R_T1ExtCnt>=0)&&(R_T1ExtCnt<R_AudioADTemp+3))
+					{
+					R_RGBCnt=6;
+					if(R_T1ExtCnt>10)
+						{
+						R_RGBCnt=5;	
+						}
+					if(R_T1ExtCnt>30)
+						{
+						R_RGBCnt=4;	
+						}
+					if(R_T1ExtCnt>70)
+						{
+						R_RGBCnt=3;	
+						}
+					if(R_T1ExtCnt>100)
+						{
+						R_RGBCnt=2;	
+						}
+					if(R_T1ExtCnt>130)
+						{
+						R_RGBCnt=1;	
+						}												
+					}
+			if(R_PanMode!=D_PanMode_CM)					
+			break;	
+		case D_PanMode_Clock:
+				if((R_T1ExtCnt>=DispKeDu_Tab[0])&&(R_T1ExtCnt<DispKeDu_Tab[0]+1))
+					{
+					R_RGBCnt=2;
+					}
+				else if((R_T1ExtCnt>=DispKeDu_Tab[1])&&(R_T1ExtCnt<DispKeDu_Tab[1]+1))
+					{
+					R_RGBCnt=2;
+					}
+				else if((R_T1ExtCnt>=DispKeDu_Tab[2])&&(R_T1ExtCnt<DispKeDu_Tab[2]+1))
+					{
+					R_RGBCnt=2;
+					}
+				else if((R_T1ExtCnt>=DispKeDu_Tab[3])&&(R_T1ExtCnt<DispKeDu_Tab[3]+1))
+					{
+					R_RGBCnt=2;
+					}
+				else if((R_T1ExtCnt>=DispKeDu_Tab[4])&&(R_T1ExtCnt<DispKeDu_Tab[4]+1))
+					{
+					R_RGBCnt=2;
+					}					
+				else if((R_T1ExtCnt>=DispKeDu_Tab[5])&&(R_T1ExtCnt<DispKeDu_Tab[5]+1))
+					{
+					R_RGBCnt=2;
+					}
+				else if((R_T1ExtCnt>=DispKeDu_Tab[6])&&(R_T1ExtCnt<DispKeDu_Tab[6]+1))
+					{
+					R_RGBCnt=2;
+					}
+				else if((R_T1ExtCnt>=DispKeDu_Tab[7])&&(R_T1ExtCnt<DispKeDu_Tab[7]+1))
+					{
+					R_RGBCnt=2;
+					}
+				else if((R_T1ExtCnt>=DispKeDu_Tab[8])&&(R_T1ExtCnt<DispKeDu_Tab[8]+1))
+					{
+					R_RGBCnt=2;
+					}
+				else if((R_T1ExtCnt>=DispKeDu_Tab[9])&&(R_T1ExtCnt<DispKeDu_Tab[9]+1))
+					{
+					R_RGBCnt=2;
+					}
+				else if((R_T1ExtCnt>=DispKeDu_Tab[10])&&(R_T1ExtCnt<DispKeDu_Tab[10]+1))
+					{
+					R_RGBCnt=2;
+					}
+				else if((R_T1ExtCnt>=DispKeDu_Tab[11])&&(R_T1ExtCnt<DispKeDu_Tab[11]+1))
+					{
+					R_RGBCnt=2;
+					}
+															
+//				if((R_T1ExtCnt>=R_Disp_KeDu+25)&&(R_T1ExtCnt<R_Disp_KeDu+25+1))
+//					{
+//					R_RGBCnt=2;
+//					}													
+				if((R_T1ExtCnt+2>=R_OffSet_Hour)&&(R_T1ExtCnt<R_OffSet_Hour+3))
+					{
+					R_RGBCnt=7;
+					}
+        			
+//				R_MainTemper=OffsetSM(time_buf1[5]);			
+				if((R_T1ExtCnt+1>=R_OffSet_Min)&&(R_T1ExtCnt<R_OffSet_Min+2))
+					{
+					R_RGBCnt=2;
+					}
+					
+//				R_MainTemper=OffsetSM(time_buf1[6]);	
+				if((R_T1ExtCnt>=R_OffSet_Sec)&&(R_T1ExtCnt<R_OffSet_Sec+1))
+					{
+					R_RGBCnt=1;
+					}
+					
+			break;	
+//		case D_PanMode_5:
+//				if(Flg_Sta)
+//					{
+//					R_SetMode=D_Alarm3;	
+//					}
+//					else
+//						{
+//						R_SetMode=D_SetMode_Quit;	
+//						}			
+			break;
+		case D_SetMode_Quit:
+		
+			break;					
+		default:
+			
+			break;		
+	}
+	if(Flg_MusicDisp)
+		{
+			
+		}
+
+}
+//-------------------------------------------
+/*---------------显示数据更新子程序------------
+//--------------------------------------------
+/输入：需要显示的数据
+/输出：显示缓存R_DBUF1,R_DBUF2,R_DBUF3,R_DBUF4等，用于显示驱动层
+/备注：放在2毫米分时中调用
+/
+*/
+//-------------------------------------------
+void 	UpdateDisplay()
+{
+	u8 i,j;
+	for(i=0;i<4;i++)
+	{
+		for(j=0;j<16;j++)
+		{
+		DispData_Tab[i][j]=0x0000;	
+		}
+	ClrWDT;		
+	}
+	
+	switch(R_MainMode)
+	{
+		case D_MMode_Main:
+			UpdateDisp_GUI();
+			break;
+		case D_MMode_TimerDisp://时间显示状态
+			UpdateDisp_Timer();
+//			UpdateDisp_SetModeClass1();
+//			UpdateDisp_SetTimer();
+			break;
+		case D_MMode_Set:
+			UpdateDisp_SetModeClass1();
+			
+//			UpdateDisp_Timer();
+			break;
+		case D_MMode_SetAlarm:
+			switch(R_AlarmSetMode)
+			{
+				case 0:
+					UpdateDisp_AlarmClock();
+					break;				
+				case D_AlarmSet_TmMin:
+					
+//					break;
+				case D_AlarmSet_TmHour:
+								
+//					break;	
+				case D_AlarmSet_TmDay:
+								
+//					break;	
+				case D_AlarmSet_TmONOFF:
+//								
+//					break;	
+				case D_AlarmSet_TmBell:
+						UpdateDisp_AlarmClockClass2();				
+					break;
+				case D_SetMode_Quit:
+//					UpdateDisp_AlarmClock();
+					UpdateDisp_AlarmClockClass2();		
+					break;					
+				default:
+					
+					break;		
+			}			
+
+			break;
+		case D_MMode_SetTimer:
+			UpdateDisp_SetTimer();
+			break;	
+		case D_MMode_SetPan:	
+			UpdateDisp_SetPan();
+		default:			
+			break;															
+	}
+									
+}
+//-------------------------------------------
+/*---------------显示驱动子程序------------
+//--------------------------------------------
+/输入：需要显示的数据，二维数组DispData_Tab[4][16]
+/输出：显示字符最小为8*16点阵，整屏64个字符
+/备注：放在2毫米分时中调用，每10ms调用一次，
+/	刷新频率：1.5hz，周期640ms
+*/
+//-------------------------------------------
+void 	DispDrv()
+{
+	static u8 R_DispPotCnt;
+
+	R_DispPotCnt++;
+	if(R_DispPotCnt==64)
+		{
+		R_DispPotCnt=0;	
+		}
+//	Disp8x16(R_DispPotCnt%16,R_DispPotCnt/16,DispData_Tab[R_DispPotCnt/16][R_DispPotCnt%16]);	
+	switch(R_DispPotCnt)
+	{
+		case 0:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 1:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 2:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;			
+		case 3:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 4:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 5:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 6:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 7:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 8:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 9:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 10:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 11:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 12:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 13:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 14:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 15:
+			Disp8x16(R_DispPotCnt%16,0,DispData_Tab[0][R_DispPotCnt%16]);
+			break;
+		case 16:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 17:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 18:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 19:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 20:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 21:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 22:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 23:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 24:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 25:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 26:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 27:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 28:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 29:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 30:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 31:
+			Disp8x16(R_DispPotCnt%16,1,DispData_Tab[1][R_DispPotCnt%16]);
+			break;
+		case 32:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 33:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 34:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 35:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 36:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 37:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 38:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 39:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 40:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 41:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 42:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 43:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 44:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 45:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 46:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 47:
+			Disp8x16(R_DispPotCnt%16,2,DispData_Tab[2][R_DispPotCnt%16]);
+			break;
+		case 48:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 49:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 50:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 51:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 52:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 53:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 54:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 55:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 56:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 57:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 58:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 59:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 60:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 61:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 62:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 63:
+			Disp8x16(R_DispPotCnt%16,3,DispData_Tab[3][R_DispPotCnt%16]);
+			break;
+		case 64:
+			
+			break;
+
+		default:				
+			break;																														
+	}			
+			
+}
+//-------------------------------------------
+/*---------------20毫秒计时子程序------------
+//--------------------------------------------
+/输入：需要计时的变量
+/输出：个变量预算后的结果
+/备注：放在2毫米分时中调用
+/	计时单位有：20ms，500ms，1S
+*/
+//-------------------------------------------
+void	Timer50msCnt()
+{
+	static char R_500msCnt,R_100msCnt,R_MusicCnt;
+	
+	R_500msCnt++;
+	R_100msCnt++;
+	
+	R_AudioAD=R_ADData3;
+	if(R_AudioAD>0x40)
+		{
+		Flg_HaveAudio=0;
+			
+		}
+		else
+			{
+			Flg_HaveAudio=1;	
+			}
+	CheckAlarm();
+//----------计时20ms------------------------------------		
+	{
+	if(R_BeepTm)
+		{
+		R_BeepTm--;
+//		if(!R_BeepTm)
+//			{
+//			R_BeepFrq=Music_Tab[R_MusicCnt][0];
+//			R_BeepFrqBak=R_BeepFrq;
+//			R_BeepTm=Music_Tab[R_MusicCnt][1];
+//			R_MusicCnt++;
+//			if(R_BeepFrq==0)R_MusicCnt=0;				
+//			}	
+		}
+		
+//		if(R_MusicCnt==9)R_MusicCnt=0;
+	
+//	if(R_100msCnt%2==0)
+//		{
+//		R_AudioADTemp=R_AudioAD*5;	
+//		}	
+//		if(R_AudioADTemp<R_AudioAD*20)
+//			{
+//			R_AudioADTemp=R_AudioAD*20;
+//			R_AudioADDec=R_AudioAD;	
+//			}		
+	if(R_100msCnt==3)//3
+		{
+		R_100msCnt=0;
+	
+		if(R_AudioADTemp<R_AudioAD*25)
+			{
+			R_AudioADTemp=R_AudioAD*25;
+			R_AudioADDec=R_AudioAD;	
+			}
+		if(R_AudioADTemp)
+			{
+			if(R_AudioADTemp>3)
+			R_AudioADTemp-=5;//R_AudioADDec/2;	
+			if(R_AudioADTemp>250)
+				R_AudioADTemp=250;
+			}		
+					
+		
+
+		}	
+			
+	}
+//----------计时20ms---END---------------------------------	
+
+//----------计时500ms------------------------------------	
+	if(R_500msCnt == 25)
+		{
+		R_500msCnt=0;
+
+//----------此段为500ms------------------------------------
+		
+		Flg_500MsFlash=!Flg_500MsFlash;	
+
+//----------计时1s------------------------------------				
+		if(Flg_500MsFlash)
+			{
+				
+			TmToSetAlarm();
+										
+			R_Second++;
+			if(R_Second%2)
+				{
+				Flg_ToCheckDHT=1;//置1，检测温湿度模块	
+				}
+			if(R_Second==60)
+				{
+				R_Second=0;
+								
+				R_Minute++;
+				if(R_Minute==60)
+					{
+					R_Minute=0;
+					R_Hour++;
+					if(R_Hour==24)
+						{
+						R_Hour=0;	
+						}
+		
+					}	
+				}
+        	
+//------	----此段为1s------------------------------------			
+        	
+			}		
+//----------计时1s---END---------------------------------					
+		}
+//----------计时500ms--END----------------------------------
+
+			
+			
+}
+//-------------------------------------------
+/*---------------闹钟处理子程序------------
+//--------------------------------------------
+/输入：按键产生标志Flg_HaveKey，按键键值R_CurKey，双击键产生标志FLG_keyDouble，
+/	按键未释放标志FLG_keymark,长按键产生标志Flg_LongKey
+/输出：各个按键功能
+/备注：主循环中调用
+/
+*/
+//-------------------------------------------
+void CheckAlarm()
+{
+	if(AlarmTm_Tab[0][4]||AlarmTm_Tab[1][4]||AlarmTm_Tab[2][4]||AlarmTm_Tab[3][4])
+		{
+		if((AlarmSetDay_Tab[0]&(1<<time_buf1[7]))&&time_buf1[5]==AlarmTm_Tab[0][0]&&time_buf1[4]==AlarmTm_Tab[0][1])
+			{
+			if(Flg_AlarmChance1==0)
+				Flg_AlarmBorm1=1;	
+			}
+			else
+				{
+				Flg_AlarmChance1=0;	
+				}	
+		if((AlarmSetDay_Tab[1]&(1<<time_buf1[7]))&&time_buf1[5]==AlarmTm_Tab[1][0]&&time_buf1[4]==AlarmTm_Tab[1][1])
+			{
+			if(Flg_AlarmChance2==0)
+				Flg_AlarmBorm2=1;	
+			}
+			else
+				{
+				Flg_AlarmChance2=0;	
+				}
+		if((AlarmSetDay_Tab[2]&(1<<time_buf1[7]))&&time_buf1[5]==AlarmTm_Tab[2][0]&&time_buf1[4]==AlarmTm_Tab[2][1])
+			{
+			if(Flg_AlarmChance3==0)
+				Flg_AlarmBorm3=1;	
+			}
+			else
+				{
+				Flg_AlarmChance3=0;	
+				}
+		if((AlarmSetDay_Tab[3]&(1<<time_buf1[7]))&&time_buf1[5]==AlarmTm_Tab[3][0]&&time_buf1[4]==AlarmTm_Tab[3][1])
+			{
+			if(Flg_AlarmChance4==0)
+				Flg_AlarmBorm4=1;	
+			}
+			else
+				{
+				Flg_AlarmChance4=0;	
+				}											
+		}
+//		else
+//			{
+//			Flg_AlarmChance1=0;
+//			Flg_AlarmChance2=0;
+//			Flg_AlarmChance3=0;
+//			Flg_AlarmChance4=0;
+//			}
+}
+//-------------------------------------------
+/*---------------取消闹钟处理子程序------------
+//--------------------------------------------
+/输入：
+/输出：
+/备注：主循环中调用
+/
+*/
+//-------------------------------------------
+void CancelAlarm()
+{
+	if(Flg_AlarmBorm1)	
+	Flg_AlarmChance1=1;	
+	Flg_AlarmBorm1=0;
+	if(Flg_AlarmBorm2)	
+	Flg_AlarmChance2=1;	
+	Flg_AlarmBorm2=0;
+	if(Flg_AlarmBorm3)	
+	Flg_AlarmChance3=1;	
+	Flg_AlarmBorm3=0;
+	if(Flg_AlarmBorm4)	
+	Flg_AlarmChance4=1;	
+	Flg_AlarmBorm4=0;	
+}
+//-------------------------------------------
+/*---------------闹钟处理子程序------------
+//--------------------------------------------
+/输入：
+/输出：
+/备注：主循环中调用
+/
+*/
+//-------------------------------------------
+void TmToSetAlarm()
+{
+	if(Flg_AlarmBorm1||Flg_AlarmBorm2||Flg_AlarmBorm3||Flg_AlarmBorm4)
+		{
+		Beep();	
+		}
+}
+//-------------------------------------------
+/*---------------蜂鸣器频率处理子程序------------
+//--------------------------------------------
+/输入：
+/输出：
+/备注：
+/
+*/
+//-------------------------------------------
+//void BeepFrq()
+//{
+//	
+//}
+//-------------------------------------------
+/*---------------按键处理子程序------------
+//--------------------------------------------
+/输入：按键产生标志Flg_HaveKey，按键键值R_CurKey，双击键产生标志FLG_keyDouble，
+/	按键未释放标志FLG_keymark,长按键产生标志Flg_LongKey
+/输出：各个按键功能
+/备注：主循环中调用
+/
+*/
+//-------------------------------------------
+void	DealKey()//放在主循环中执行
+{
+	u8 R_BottomMode;
+	if(Flg_HaveKey == 0&&(Flg_RxIROK==0))
+		{
+			
+		return;	
+		}
+	if(Flg_RxIROK)
+		{
+		Flg_RxIROK=0;
+		if(RxData_Tab[2]==~RxData_Tab[3])
+			{
+			R_BottomMode =DealRFKey(RxData_Tab[2]);	
+//			if(Flg_IRReplayKey==0)
+//			Beep();
+			}				
+			else
+				{
+				return;		
+				}	
+		}
+		else
+			{
+			 R_BottomMode = R_CurKey;
+//			 Beep();	
+			}
+		
+	Flg_HaveKey=0;
+		
+	 switch(R_BottomMode)
+		{
+		case D_keyDown:	
+				if(FLG_keymark)
+					{
+					break;	
+					}
+				R_PanLight-=5;
+				EA = 0;	
+				PIN_SW2 |= 0x80;
+				PWM7T2 = PWM_DUTY*R_PanLight/100;
+				PWM2T2 = PWM_DUTY*R_PanLight/100;
+				PWM3T2 = PWM_DUTY*R_PanLight/100;
+				PWMCR |= D_EnPWMMode;                  //使能PWM模块
+				PIN_SW2 &= ~0x80;
+				EA = 1;
+				switch(R_MainMode)
+				{
+					case D_MMode_Main:
+
+						break;
+					case D_MMode_TimerDisp://
+							
+						break;
+					case D_MMode_Set:
+							ChangeSetMode(0);
+						break;
+					case D_MMode_SetAlarm:
+							switch(R_AlarmSetMode)
+							{
+								case 0:
+									SelectAlarm(0);
+									break;
+								case D_AlarmSet_TmMin:
+									
+//									break;	
+								case D_AlarmSet_TmHour:
+									
+//									break;	
+								case D_AlarmSet_TmBell:
+									
+//									break;
+								case D_AlarmSet_TmDay:	
+								case D_AlarmSet_TmONOFF:			
+								case D_SetMode_Quit:
+									SetAlarmTimer(0);
+									break;					
+								default:
+									
+									break;		
+							}
+						break;
+					case D_MMode_SetTimer:
+						switch(R_SetTmMode)
+						{
+							case 0:
+									
+								break;		
+							case D_SetMode_Sec:
+									
+//								break;	
+							case D_SetMode_Min:
+									
+//								break;	
+							case D_SetMode_Hour:
+									
+//								break;	
+							case D_SetMode_Data:
+									
+//								break;	
+							case D_SetMode_Mon:
+									
+//								break;	
+							case D_SetMode_Year:
+									
+//								break;
+							case D_SetMode_Day:
+									SetTimer(0);
+								break;
+							case D_SetMode_Quit:
+									
+								break;				
+							default:			
+								break;																						
+						}						
+						break;	
+					case D_MMode_SetPan:
+						SelectPanMode(0,0);
+						break;							
+					default:			
+						break;															
+				}
+				
+			break;
+
+		case D_keyUp:
+				if(FLG_keymark)
+					{
+					break;	
+					}
+				R_PanLight+=10;	EA = 0;
+				PIN_SW2 |= 0x80;
+				PWM7T2 = PWM_DUTY*R_PanLight/100;
+				PWM2T2 = PWM_DUTY*R_PanLight/100;
+				PWM3T2 = PWM_DUTY*R_PanLight/100;
+				PWMCR |= D_EnPWMMode;                  //使能PWM模块
+				PIN_SW2 &= ~0x80;EA = 1;					
+				switch(R_MainMode)
+				{
+					case D_MMode_Main:
+
+						break;
+					case D_MMode_TimerDisp://时间设置状态
+
+						break;
+					case D_MMode_Set:
+							ChangeSetMode(1);
+						break;
+					case D_MMode_SetAlarm:
+							switch(R_AlarmSetMode)
+							{
+								case 0:
+									SelectAlarm(1);
+									break;
+								case D_AlarmSet_TmMin:
+									
+//									break;	
+								case D_AlarmSet_TmHour:
+									
+//									break;	
+								case D_AlarmSet_TmBell:
+									
+//									break;
+								case D_AlarmSet_TmDay:
+								case D_AlarmSet_TmONOFF:				
+								case D_SetMode_Quit:
+									SetAlarmTimer(1);
+									break;					
+								default:
+									
+									break;		
+							}
+						break;
+					case D_MMode_SetTimer:
+						switch(R_SetTmMode)
+						{
+							case 0:
+									
+								break;		
+							case D_SetMode_Sec:
+									
+//								break;	
+							case D_SetMode_Min:
+									
+//								break;	
+							case D_SetMode_Hour:
+									
+//								break;	
+							case D_SetMode_Data:
+									
+//								break;	
+							case D_SetMode_Mon:
+									
+//								break;	
+							case D_SetMode_Year:
+									
+//								break;
+							case D_SetMode_Day:
+									SetTimer(1);
+								break;
+							case D_SetMode_Quit:
+									
+								break;				
+							default:			
+								break;																						
+						}						
+						break;
+					case D_MMode_SetPan:
+						SelectPanMode(1,0);							
+					default:			
+						break;															
+				}
+			break;
+		case D_keyLeft: 
+				if(FLG_keymark)
+					{
+					break;	
+					}
+				switch(R_MainMode)
+				{
+					case D_MMode_Main:
+
+						break;
+					case D_MMode_TimerDisp://
+//							ChangeSetTmMode(0);//左移光标
+						break;
+					case D_MMode_Set:
+
+						break;
+					case D_MMode_SetAlarm:
+							switch(R_AlarmSetMode)
+							{
+								case 0:
+       								
+									break;
+								case D_AlarmSet_TmMin:
+										
+								case D_AlarmSet_TmHour:
+										
+								case D_AlarmSet_TmDay:
+									
+								case D_AlarmSet_TmBell:
+								case D_AlarmSet_TmONOFF:				
+								case D_SetMode_Quit:
+									SelectAlarmSet(1);
+									break;					
+								default:			
+									break;		
+							}						
+							
+						break;
+					case D_MMode_SetTimer:
+						switch(R_SetTmMode)
+						{
+							case 0:
+									
+								break;		
+							case D_SetMode_Sec:
+									
+//								break;	
+							case D_SetMode_Min:
+									
+//								break;	
+							case D_SetMode_Hour:
+									
+//								break;	
+							case D_SetMode_Data:
+									
+//								break;	
+							case D_SetMode_Mon:
+									
+//								break;	
+							case D_SetMode_Year:
+									
+//								break;
+							case D_SetMode_Day:
+									
+//								break;
+							case D_SetMode_Quit:
+									ChangeSetTmMode(1);
+								break;				
+							default:			
+								break;																						
+						}						
+						break;
+					case D_MMode_SetPan:
+						SelectPanMode(0,1);							
+					default:			
+						break;															
+				}
+				
+			break;
+		case D_keyRight:	
+				if(FLG_keymark)
+					{
+					break;	
+					}
+				switch(R_MainMode)
+				{
+					case D_MMode_Main:
+
+						break;
+					case D_MMode_TimerDisp://时间设置状态
+//							ChangeSetTmMode(1);//右移光标
+						break;
+					case D_MMode_Set:
+
+						break;
+					case D_MMode_SetAlarm:
+							switch(R_AlarmSetMode)
+							{
+								case 0:
+        								
+									break;
+								case D_AlarmSet_TmMin:
+										
+								case D_AlarmSet_TmHour:
+										
+								case D_AlarmSet_TmDay:
+									
+								case D_AlarmSet_TmBell:
+								case D_AlarmSet_TmONOFF:				
+								case D_SetMode_Quit:
+									SelectAlarmSet(0);
+									break;					
+								default:			
+									break;		
+							}
+						break;
+					case D_MMode_SetTimer:
+						switch(R_SetTmMode)
+						{
+							case 0:
+									
+								break;		
+							case D_SetMode_Sec:
+									
+//								break;	
+							case D_SetMode_Min:
+									
+//								break;	
+							case D_SetMode_Hour:
+									
+//								break;	
+							case D_SetMode_Data:
+									
+//								break;	
+							case D_SetMode_Mon:
+									
+//								break;	
+							case D_SetMode_Year:
+									
+//								break;
+							case D_SetMode_Day:
+									
+//								break;
+							case D_SetMode_Quit:
+									ChangeSetTmMode(0);
+								break;				
+							default:			
+								break;																						
+						}						
+						break;
+					case D_MMode_SetPan:
+						SelectPanMode(0,1);							
+					default:			
+						break;															
+				}
+				
+			break;																
+		case D_keySet://确定键，退出键
+				if(FLG_keymark)
+					{
+					break;	
+					}
+				CancelAlarm();									
+				switch(R_MainMode)
+				{
+					case D_MMode_Main:
+						R_MainMode=D_MMode_TimerDisp;
+						R_SetTmMode=D_SetMode_Quit;//时间设置光标从退出开始
+						break;
+					case D_MMode_TimerDisp:
+						R_MainMode=D_MMode_Set;	//进入时间设置状态
+						break;
+					case D_MMode_Set:
+						
+						switch(R_SetMode)
+						{
+							case D_SetMode_Timer:
+									R_MainMode=D_MMode_SetTimer;
+									R_SetTmMode=D_SetMode_Sec;
+								break;
+							case D_SetMode_Alarm:
+									R_MainMode=D_MMode_SetAlarm;
+									R_AlarmMode=D_Alarm1;
+									R_AlarmSetMode=0;		
+								break;	
+							case D_SetMode_Pan:
+									R_MainMode=D_MMode_SetPan;			
+								break;	
+//							case D_SetMode_4:
+//											
+								break;
+							case D_SetMode_Quit:
+									R_MainMode=D_MMode_TimerDisp;			
+								break;					
+							default:
+								
+								break;		
+						}
+						break;
+					case D_MMode_SetAlarm:
+						switch(R_AlarmSetMode)
+						{
+							case 0:
+								switch(R_AlarmMode)
+								{
+									case D_Alarm1:
+										
+//										break;
+									case D_Alarm2:
+										
+//										break;	
+									case D_Alarm3:
+										
+//										break;	
+									case D_Alarm4:
+										R_AlarmSetMode=D_AlarmSet_TmMin;
+										break;
+									case D_SetMode_Quit:
+										R_MainMode=D_MMode_Set;
+										break;					
+									default:			
+										break;		
+								} 								
+        							
+								break;
+							case D_AlarmSet_TmMin:
+								
+								break;	
+							case D_AlarmSet_TmHour:
+								
+								break;	
+							case D_AlarmSet_TmDay:
+						if(AlarmSetDay_Tab[R_AlarmMode-1]&(1<<AlarmTm_Tab[R_AlarmMode-1][2]))
+								AlarmSetDay_Tab[R_AlarmMode-1]&=~(1<<AlarmTm_Tab[R_AlarmMode-1][2]-1);
+								else
+									AlarmSetDay_Tab[R_AlarmMode-1]|=(1<<AlarmTm_Tab[R_AlarmMode-1][2]-1);
+//																	
+								break;
+							case D_SetMode_Quit:
+								R_AlarmSetMode=0;
+								break;					
+							default:
+								
+								break;		
+						}						
+//						R_AlarmSetMode=D_AlarmSet;
+//						R_MainMode=D_MMode_Set;
+						break;
+					case D_MMode_SetTimer:
+						switch(R_SetTmMode)
+						{
+							case 0:
+									
+								break;		
+							case D_SetMode_Sec:
+									
+								break;	
+							case D_SetMode_Min:
+									
+								break;	
+							case D_SetMode_Hour:
+									
+								break;	
+							case D_SetMode_Data:
+									
+								break;	
+							case D_SetMode_Mon:
+									
+								break;	
+							case D_SetMode_Year:
+									
+								break;
+							case D_SetMode_Day:
+
+								break;
+							case D_SetMode_Quit:
+									
+									R_MainMode=D_MMode_Set;
+								break;				
+							default:			
+								break;																						
+						}							
+						break;	
+					case D_MMode_SetPan:
+						switch(R_PanMode)
+						{
+							case D_PanMode_Clock:
+									
+//								break;
+							case D_PanMode_Music:
+												
+//								break;	
+							case D_PanMode_CM:
+									R_MainMode=D_MMode_Set;			
+								break;	
+//							case D_PanMode_5:
+//											
+								break;
+							case D_SetMode_Quit:
+									R_MainMode=D_MMode_Set;		
+								break;					
+							default:
+								
+								break;		
+						}						
+					default:			
+						break;															
+				}
+//				EnableDoubleKey();
+//				if(!FLG_keyDouble)
+//					{
+//					break;	
+//					}
+//				FLG_keyDouble=0;
+										
+
+			break;
+		case '0':
+				Flg_MusicDisp=!Flg_MusicDisp;
+			break;
+		case '1':
+		case '2':
+		case '3':
+		case '4':
+		case '5':
+		case '6':
+		case '7':
+		case '8':
+		case '9':
+
+			break;
+		case '*':
+			Pin_MotorSW=1;
+			Flg_RGB_Start=0;
+//				PIN_SW2 |= 0x80;
+//				PWM7T2 = PWM_DUTY*R_PanLight/100;
+//				PWM2T2 = PWM_DUTY*R_PanLight/100;
+//				PWM3T2 = PWM_DUTY*R_PanLight/100;
+//				PWMCR &= ~D_EnPWMMode;                  //使能PWM模块
+//				PIN_SW2 &= ~0x80;			
+			EX0=0;
+			break;
+		case '#':
+			Pin_MotorSW=0;
+//				PIN_SW2 |= 0x80;
+//				PWM7T2 = PWM_DUTY*R_PanLight/100;
+//				PWM2T2 = PWM_DUTY*R_PanLight/100;
+//				PWM3T2 = PWM_DUTY*R_PanLight/100;
+//				PWMCR |= D_EnPWMMode;                  //使能PWM模块
+//				PIN_SW2 &= ~0x80;			
+//			Flg_RGB_Start=1;
+			EX0=1;												
+		 default:		           
+		 	 break;
+		}
+		Beep();
+}
+//-------------------------------------------
+/*---------------红外遥控处理程序------------
+//--------------------------------------------
+/输入：
+/输出：
+/备注：
+/
+*/
+//-------------------------------------------	
+u8 DealRFKey(u8 R_Data)
+{
+
+	 switch(R_Data)
+		{
+		case 0xa2:	
+			R_MainTemper= '1';
+			break;
+		case 0x62:	
+			R_MainTemper= '2';
+			break;
+		case 0xe2:	
+			R_MainTemper= '3';
+			break;
+		case 0x22:	
+			R_MainTemper= '4';
+			break;
+		case 0x02:	
+			R_MainTemper= '5';
+			break;
+		case 0xc2:	
+			R_MainTemper= '6';
+			break;
+		case 0xe0:	
+			R_MainTemper= '7';
+			break;
+		case 0xa8:	
+			R_MainTemper= '8';
+			break;
+		case 0x90:	
+			R_MainTemper= '9';
+			break;
+		case 0x98:	
+			R_MainTemper= '0';
+			break;
+		case 0x68:	
+			R_MainTemper= '*';
+			break;
+		case 0xb0:	
+			R_MainTemper= '#';
+			break;
+		case 0x18:	
+			R_MainTemper= D_keyUp;
+			break;
+		case 0x4a:	
+			R_MainTemper= D_keyDown;
+			break;	
+		case 0x10:	
+			R_MainTemper= D_keyLeft;
+			break;
+		case 0x5a:	
+			R_MainTemper= D_keyRight;
+			break;	
+		case 0x38:	
+			R_MainTemper= D_keySet;
+			break;																				
+		 default:;		           
+		 	 break;
+		}
+	return R_MainTemper;		
+}
+//-------------------------------------------
+/*---------------蜂鸣器子程序------------
+//--------------------------------------------
+/输入：
+/输出：
+/备注：
+/
+*/
+//-------------------------------------------	
+void BeepDrv()
+{
+	if(R_BeepTm)
+		{
+		if(R_BeepFrq)
+			{
+			R_BeepFrq--;
+			if(R_BeepFrq==0)
+				{
+				R_BeepFrq=R_BeepFrqBak;
+				Pin_Beep=!Pin_Beep;	
+				}
+				
+			}
+			
+		}	
+		else
+			{
+			Pin_Beep=1;	
+			}
+			
+}
+//-------------------------------------------
+/*---------------按键扫描子程序------------
+//--------------------------------------------
+/输入：
+/输出：各个按键键值R_KeyValue，用于按键中间层使用
+/备注：定时器中断子程序中调用
+/
+*/
+//-------------------------------------------	
+void	KeyScan()//放在中断函数中执行125us执行一次
+{
+	R_KeyValue=0;
+	if(!Pin_KeyDown)
+		{
+		R_KeyValue=D_keyDown;
+		}
+		else
+			{
+
+			}
+	if(!Pin_KeyUp)
+		{
+		R_KeyValue=D_keyUp;
+		}
+		else
+			{
+
+			}		
+	if(!Pin_KeyLeft)
+		{
+		R_KeyValue=D_keyLeft;
+		}
+		else
+			{
+
+			}		
+	if(!Pin_KeyRight)
+		{
+		R_KeyValue=D_keyRight;
+		}
+		else
+			{
+	
+			}				
+	if(!Pin_KeySet)
+		{
+		R_KeyValue=D_keySet;	
+		}
+				
+
+																
+}
+
+//-------------------------------------------
+/*---------------初始化子程序------------
+//--------------------------------------------
+/输入：
+/输出：
+/备注：定时器初始化，看门狗初始化
+/
+*/
+//-------------------------------------------	
+void Init_System()
+{
+    	P0M0 = 0x00;
+    	P0M1 = 0x00;
+    	P1M0 = 0x00;
+    	P1M1 = 0x00;
+    	P2M0 = 0x00;
+    	P2M1 = 0x00;
+    	P3M0 = 0x0a;
+    	P3M1 = 0x08;
+    	P4M0 = 0x00;
+    	P4M1 = 0x00;
+    	P5M0 = 0x00;
+    	P5M1 = 0x00;
+    	P6M0 = 0x00;
+    	P6M1 = 0x00;
+    	
+	Pin_PWM_R=0;
+	Pin_PWM_G=0;
+	Pin_PWM_B=0;
+	Pin_KeyDown	=1;
+	Pin_KeyUp	=1;
+	Pin_KeyLeft	=1;
+	Pin_KeyRight	=1;
+	Pin_KeySet	=1;
+//------------------------------------------------------定时器0配置 用作标准计时  
+   	 AUXR |= 0x80;                   //定时器0为1T模式
+// 	 AUXR &= 0x7f;                   //定时器0为12T模式
+	TMOD &= 0x00;		//设置定时器模式 工作方式0,16位自动重载	
+//	TL0 = 0x9A;		//设置定时初值
+//	TH0 = 0xFA;		//设置定时初值 
+//	TL0 = 0x33;		//设置定时初值
+//	TH0 = 0xF5;		//设置定时初值
+	TL1 = D_T1Timer;		//设置定时初值
+	TH1 = D_T1Timer>>8;		//设置定时初值125us 
+    	TR0 = 1;                        //定时器0开始计时
+    	ET0 = 1;                        //使能定时器0中断
+    	
+    	AUXR |= 0x40;                   //定时器0为1T模式
+    	TL0 = D_T0Timer;		//设置定时初值
+	TH0 = D_T0Timer>>8;		//设置定时初值	98.6us
+//    	TR1 = 1;                        //定时器0开始计时
+//    	ET1 = 1;                        //使能定时器0中断	
+//------------------------------------------------------串口通讯配置
+
+	SCON = 0x50;		//8位数据,可变波特率
+	AUXR |= 0x01;		//串口1选择定时器2为波特率发生器 9600
+	AUXR |= 0x04;		//定时器2时钟为Fosc,即1T
+	T2L = 0xC0;		//设定定时初值	22.M
+	T2H = 0xFD;		//设定定时初值
+//	T2L = 0xE0;		//设定定时初值
+//	T2H = 0xFE;		//设定定时初值	11092500L
+	AUXR |= 0x10;		//启动定时器2
+  
+//	AUXR |= 0x40;		//定时器1时钟为Fosc,即1T
+//	AUXR &= 0xFE;		//串口1选择定时器1为波特率发生器
+//    	SCON = 0x5a;                    //8 bit data ,no parity bit
+//    	TMOD = 0x20;                    //T1 as 8-bit auto reload
+////    	TH1 = TL1 = -(FOSC/32/BAUD); //Set Uart baudrate
+//	TL1 = 0xB8;		//设定定时初值
+//	TH1 = 0xB8;		//设定定时器重装值
+//    	TR1 = 1;                        //T1 start running
+//----------------------------------------------------------外部中断2，转盘速度检测
+//	INT_CLKO |= 0x10;               //然后再开中断即可
+//----------------------------------------------------------外部中断2，转盘速度检测	
+    	INT0 = 1;
+    	IT0 = 1;                    //设置INT0的中断类型 (1:仅下降沿 0:上升沿和下降沿)
+    	EX0 = 1;                    //使能INT0中断	
+////---------------------------------------------	
+	ES = 1;                 //Enable UART interrupt
+    	EA = 1;
+//    	IP=0x03;
+//---------------------------------------------------------------------
+    WDT_CONTR = 0x02;       //看门狗定时器溢出时间计算公式: (12 * 32768 * PS) / FOSC (秒)
+                            //设置看门狗定时器分频数为32,溢出时间如下:
+                            //11.0592M : 1.14s
+                            //18.432M  : 0.68s
+                            //20M      : 0.63s
+    WDT_CONTR |= 0x20;      //启动看门狗  
+    
+ 
+}

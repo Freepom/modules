@@ -1,0 +1,43 @@
+
+	switch(R_SetMode)
+	{
+		case 0:
+		
+		        R_SetMode=D_SetMode_Mode;
+			break;	    
+		case D_SetMode_Mode:
+		
+		        R_SetMode=D_SetMode_Day;
+			break;
+		case D_SetMode_Day:
+		
+		        R_SetMode=D_SetMode_Min;
+			break;			
+	
+		case D_SetMode_Min:
+		
+		        R_SetMode=D_SetMode_V1;
+			break;
+		case D_SetMode_V1:
+		
+		        R_SetMode=D_SetMode_V2;
+			break;			
+		case D_SetMode_V2:
+		
+		        R_SetMode=D_SetMode_K;
+			break;
+		case D_SetMode_K:
+		
+		        R_SetMode=D_SetMode_Frc;
+			break;	
+		case D_SetMode_Frc:
+		
+		        R_SetMode=D_SetMode_TV;
+			break;
+		case D_SetMode_TV:
+		
+		        R_SetMode==0;
+			break;	
+		default:
+			break;										
+	}
